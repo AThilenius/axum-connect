@@ -10,6 +10,7 @@ readme = "../README.md"
 repository = "https://github.com/AThilenius/axum-connect"
 
 [dependencies]
+async-trait = "0.1.64"
 axum = "0.6.9"
 futures = "0.3.26"
 protobuf = "3.2.0"

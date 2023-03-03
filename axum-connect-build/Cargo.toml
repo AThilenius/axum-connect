@@ -12,6 +12,6 @@ repository = "https://github.com/AThilenius/axum-connect"
 [dependencies]
 anyhow = "1.0"
 convert_case = "0.6.0"
-protobuf = { git = "https://github.com/AThilenius/rust-protobuf.git" }
-protobuf-codegen = { git = "https://github.com/AThilenius/rust-protobuf.git" }
-protobuf-parse = { git = "https://github.com/AThilenius/rust-protobuf.git" }
+protobuf = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }
+protobuf-codegen = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }
+protobuf-parse = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }

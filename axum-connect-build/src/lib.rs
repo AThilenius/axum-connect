@@ -118,7 +118,7 @@ use axum::{
     Router,
 };
 
-use axum_connect::{HandlerFuture, RpcRouter};
+use axum_connect::{handler::HandlerFuture, router::RpcRouter};
 ";
 
 const SERVICE_TEMPLATE: &str = "
@@ -129,9 +129,9 @@ impl @@SERVICE_NAME@@ {
 }";
 
 const METHOD_TEMPLATE: &str = "
-    pub fn @@METHOD_NAME@@<T, H, S, B>(handler: H) -> impl FnOnce(Router<S, B>) -> RpcRouter<S, B>
+    pub fn @@METHOD_NAME@@<T, H, R, S, B>(handler: H) -> impl FnOnce(Router<S, B>) -> RpcRouter<S, B>
     where
-        H: HandlerFuture<super::@@INPUT_TYPE@@, super::@@OUTPUT_TYPE@@, T, S, B>,
+        H: HandlerFuture<super::@@INPUT_TYPE@@, super::@@OUTPUT_TYPE@@, R, T, S, B>,
         T: 'static,
         S: Clone + Send + Sync + 'static,
         B: HttpBody + Send + 'static,
@@ -143,9 +143,7 @@ const METHOD_TEMPLATE: &str = "
                 \"@@ROUTE@@\",
                 post(|State(state): State<S>, request: Request<B>| async move {
                     let res = handler.call(request, state).await;
-                    ::axum_connect::protobuf_json_mapping::print_to_string(&res)
-                        .unwrap()
-                        .into_response()
+                    res.into_response()
                 }),
             )
         }
