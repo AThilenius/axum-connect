@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package axum_connect.examples.hello_world;
+package hello_world;
 
 message HelloRequest {
     string name = 1;
