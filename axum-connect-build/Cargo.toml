@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect-build"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 categories = ["rpc", "connect-web", "axum", "http"]
 description = "Connect-Web RPC for Axum"
@@ -12,6 +12,6 @@ repository = "https://github.com/AThilenius/axum-connect"
 [dependencies]
 anyhow = "1.0"
 convert_case = "0.6.0"
-protobuf = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }
-protobuf-codegen = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }
-protobuf-parse = { git = "https://github.com/AThilenius/rust-protobuf.git", tag = "v3.2.1" }
+protobuf = "3.2.0"
+protobuf-codegen = "3.2.0"
+protobuf-parse = "3.2.0"

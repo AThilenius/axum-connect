@@ -1,9 +1,16 @@
 syntax = "proto3";
 
-package hello_world;
+package package.path;
 
 message HelloRequest {
+    message EmbeddedOne {
+        message EmbeddedTwo {
+            string name = 1;
+        }
+        EmbeddedTwo embedded_two = 1;
+    }
     string name = 1;
+    EmbeddedOne embedded_one = 2;
 }
 
 message HelloResponse {
