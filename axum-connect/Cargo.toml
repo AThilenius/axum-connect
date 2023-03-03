@@ -1,0 +1,12 @@
+[package]
+name = "axum-connect"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.6.9"
+futures = "0.3.26"
+protobuf = "3.2.0"
+protobuf-json-mapping = "3.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
