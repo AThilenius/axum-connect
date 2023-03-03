@@ -2,6 +2,12 @@
 name = "axum-connect"
 version = "0.1.0"
 edition = "2021"
+categories = ["rpc", "connect-web", "axum", "http"]
+description = "Connect-Web RPC for Axum"
+keywords = ["rpc", "axum", "protobuf", "connect"]
+license = "MIT OR Apache-2.0"
+readme = "../README.md"
+repository = "https://github.com/AThilenius/axum-connect"
 
 [dependencies]
 axum = "0.6.9"
