@@ -1,0 +1,8 @@
+version: v1
+name: buf.build/woodriver-energy/blink
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT

@@ -1,3 +1,12 @@
 {
-  "cSpell.words": ["codegen", "proto", "protobuf", "serde", "typecheck"]
+  "cSpell.words": [
+    "bufbuild",
+    "codegen",
+    "proto",
+    "protobuf",
+    "protoc",
+    "serde",
+    "Thilenius",
+    "typecheck"
+  ]
 }
