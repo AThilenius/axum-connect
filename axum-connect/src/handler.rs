@@ -19,6 +19,9 @@ pub trait HandlerFuture<TReq, TRes, Res, T, S, B>: Clone + Send + Sized + 'stati
     fn call(self, req: Request<B>, state: S) -> Self::Future;
 }
 
+// This is a single expanded version of the macro below. It's left here for ease of reading and
+// understanding the macro, as well as development.
+// ```rust
 // #[allow(unused_parens, non_snake_case, unused_mut)]
 // impl<TReq, TRes, Res, F, Fut, S, B, T1> HandlerFuture<TReq, TRes, Res, (T1, TReq), S, B> for F
 // where
@@ -72,7 +75,7 @@ pub trait HandlerFuture<TReq, TRes, Res, T, S, B>: Clone + Send + Sized + 'stati
 //         })
 //     }
 // }
-
+// ```
 macro_rules! impl_handler {
     (
         [$($ty:ident),*]

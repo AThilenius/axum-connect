@@ -29,7 +29,14 @@ where
             }
         };
 
-        let (parts, _) = self.parts.into_parts();
+        let (mut parts, _) = self.parts.into_parts();
+
+        // Add Content-Type JSON header to parts.
+        parts.headers.insert(
+            "Content-Type",
+            "application/json".parse().expect("Wrong MIME type"),
+        );
+
         (parts, rpc_call_response).into_response()
     }
 }
