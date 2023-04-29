@@ -1,9 +1,14 @@
 [package]
 name = "axum-connect-build"
-version = "0.1.1"
+version = "0.1.2"
+authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
-categories = ["rpc", "connect-web", "axum", "http"]
-description = "Connect-Web RPC for Axum"
+categories = [
+  "network-programming",
+  "web-programming",
+  "web-programming::http-server",
+]
+description = "Connect-Web RPC code generator for axum-connect"
 keywords = ["rpc", "axum", "protobuf", "connect"]
 license = "MIT OR Apache-2.0"
 readme = "../README.md"
