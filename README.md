@@ -66,18 +66,14 @@ Start by creating the obligatory 'hello world' proto service definition.
 ```protobuf
 syntax = "proto3";
 
-package hello_world;
+package hello;
 
-message HelloRequest {
-    string name = 1;
-}
+message HelloRequest { string name = 1; }
 
-message HelloResponse {
-    string message = 1;
-}
+message HelloResponse { string message = 1; }
 
 service HelloWorldService {
-    rpc SayHello(HelloRequest) returns (HelloResponse) {}
+  rpc SayHello(HelloRequest) returns (HelloResponse) {}
 }
 ```
 
