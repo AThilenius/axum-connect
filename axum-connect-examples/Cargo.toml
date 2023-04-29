@@ -1,11 +1,12 @@
 [package]
-name = "hello_world"
+name = "axum-connect-example"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 axum = "0.6.9"
 axum-connect = { path = "../axum-connect" }
+prost = "0.11.9"
 tokio = { version = "1.0", features = ["full"] }
 
 [build-dependencies]

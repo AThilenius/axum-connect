@@ -1,205 +1,44 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    env,
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+};
 
-use convert_case::{Case, Casing};
-use protobuf::reflect::{FileDescriptor, MessageDescriptor};
-use protobuf_parse::Parser;
+use gen::AxumConnectServiceGenerator;
 
-// TODO There is certainly a much easier way to do this, but I can't make sense of rust-protobuf.
+mod gen;
+
 pub fn axum_connect_codegen(
-    include: impl AsRef<Path>,
+    include: &[impl AsRef<Path>],
     inputs: &[impl AsRef<Path>],
 ) -> anyhow::Result<()> {
-    protobuf_codegen::Codegen::new()
-        .pure()
-        .cargo_out_dir("connect_proto_gen")
-        .inputs(inputs)
-        .include(&include)
-        .run()?;
+    let descriptor_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("proto_descriptor.bin");
 
-    let mut parser = Parser::new();
-    parser.pure();
-    parser.inputs(inputs);
-    parser.include(include);
+    let mut conf = prost_build::Config::new();
+    conf.compile_well_known_types();
+    conf.file_descriptor_set_path(&descriptor_path);
+    conf.extern_path(".google.protobuf", "::pbjson_types");
+    conf.service_generator(Box::new(AxumConnectServiceGenerator::new()));
+    conf.compile_protos(inputs, include).unwrap();
 
-    let parsed = parser
-        .parse_and_typecheck()
-        .expect("parse and typecheck the protobuf files");
+    // Use pbjson to generate the Serde impls, and inline them with the Prost files.
+    let descriptor_set = std::fs::read(descriptor_path)?;
+    let mut output: PathBuf = PathBuf::from(env::var("OUT_DIR").unwrap());
+    output.push("FILENAME");
 
-    let file_descriptors = FileDescriptor::new_dynamic_fds(parsed.file_descriptors.clone(), &[])?;
+    let writers = pbjson_build::Builder::new()
+        .register_descriptors(&descriptor_set)?
+        .generate(&["."], move |package| {
+            output.set_file_name(format!("{}.rs", package));
 
-    // Create a list of relative paths and their corresponding file descriptors.
-    let relative_paths = parsed
-        .relative_paths
-        .iter()
-        .map(|p| {
-            (
-                file_descriptors
-                    .iter()
-                    .find(|&fd| fd.name().ends_with(p.to_str()))
-                    .expect(&format!(
-                        "find a file descriptor matching the relative path {}",
-                        p.to_str()
-                    ))
-                    .clone(),
-                p.to_path()
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            )
-        })
-        .collect();
+            let file = std::fs::OpenOptions::new().append(true).open(&output)?;
 
-    // Flat map the full proto names to their respective rust type name.
-    let message_names = map_names(relative_paths);
+            Ok(BufWriter::new(file))
+        })?;
 
-    for path in parsed.relative_paths {
-        // Find the relative file descriptor
-        let file_descriptor = parsed
-            .file_descriptors
-            .iter()
-            .find(|&fd| fd.name.clone().unwrap_or_default().ends_with(path.to_str()))
-            .expect(&format!(
-                "find a file descriptor matching the relative path {}",
-                path.to_str()
-            ));
-
-        // TODO: This seems fragile.
-        let path = path.to_path().with_extension("rs");
-        let cargo_out_dir = std::env::var("OUT_DIR")?;
-        let out_dir = Path::new(&cargo_out_dir).join("connect_proto_gen");
-        let proto_rs_file_name = path.file_name().unwrap().to_str().unwrap();
-        let proto_rs_full_path = out_dir.join(&proto_rs_file_name);
-
-        // Replace all instances of "::protobuf::" with "::axum_connect::protobuf::" in the original
-        // generated file.
-        let rust = std::fs::read_to_string(&proto_rs_full_path)?;
-        let rust = rust.replace("::protobuf::", "::axum_connect::protobuf::");
-        // std::fs::write(&proto_rs_full_path, rust)?;
-
-        // Build up the service implementation file source.
-        let mut c = String::new();
-
-        c.push_str(FILE_PREAMBLE_TEMPLATE);
-
-        for service in &file_descriptor.service {
-            // Build up methods first
-            let mut m = String::new();
-
-            for method in &service.method {
-                let input_type = message_names.get(method.input_type()).unwrap();
-                let output_type = message_names.get(method.output_type()).unwrap();
-
-                m.push_str(
-                    &METHOD_TEMPLATE
-                        .replace("@@METHOD_NAME@@", &method.name().to_case(Case::Snake))
-                        .replace("@@INPUT_TYPE@@", &input_type)
-                        .replace("@@OUTPUT_TYPE@@", &output_type)
-                        .replace(
-                            "@@ROUTE@@",
-                            &format!(
-                                "/{}.{}/{}",
-                                file_descriptor.package(),
-                                service.name(),
-                                method.name()
-                            ),
-                        ),
-                );
-            }
-
-            c.push_str(
-                &SERVICE_TEMPLATE
-                    .replace("@@SERVICE_NAME@@", service.name())
-                    .replace("@@SERVICE_METHODS@@", &m),
-            );
-        }
-
-        let mut final_file = String::new();
-        final_file.push_str(&rust);
-        final_file.push_str(&c);
-
-        std::fs::write(&proto_rs_full_path, &final_file)?;
+    for (_, mut writer) in writers {
+        writer.flush()?;
     }
 
     Ok(())
-}
-
-const FILE_PREAMBLE_TEMPLATE: &str = "// Generated by axum-connect-build
-use axum::{
-    body::HttpBody, extract::State, http::Request, response::IntoResponse, routing::post, BoxError,
-    Router,
-};
-
-use axum_connect::{handler::HandlerFuture, router::RpcRouter};
-";
-
-const SERVICE_TEMPLATE: &str = "
-pub struct @@SERVICE_NAME@@;
-
-impl @@SERVICE_NAME@@ {
-@@SERVICE_METHODS@@
-}";
-
-const METHOD_TEMPLATE: &str = "
-    pub fn @@METHOD_NAME@@<T, H, R, S, B>(handler: H) -> impl FnOnce(Router<S, B>) -> RpcRouter<S, B>
-    where
-        H: HandlerFuture<@@INPUT_TYPE@@, @@OUTPUT_TYPE@@, R, T, S, B>,
-        T: 'static,
-        S: Clone + Send + Sync + 'static,
-        B: HttpBody + Send + 'static,
-        B::Data: Send,
-        B::Error: Into<BoxError>,
-    {
-        move |router: Router<S, B>| {
-            router.route(
-                \"@@ROUTE@@\",
-                post(|State(state): State<S>, request: Request<B>| async move {
-                    let res = handler.call(request, state).await;
-                    res.into_response()
-                }),
-            )
-        }
-    }
-";
-
-/// Takes a vec to FileDescriptor and returns a flattened map of the full name for each message type
-/// to the associated Rust name relative to `super`.
-fn map_names(file_descriptors: Vec<(FileDescriptor, String)>) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-
-    for (file_descriptor, path) in file_descriptors {
-        for message in file_descriptor.messages() {
-            collect_messages_recursive(&mut map, message, format!("super::{}", path));
-        }
-    }
-
-    map
-}
-
-fn collect_messages_recursive(
-    map: &mut HashMap<String, String>,
-    message: MessageDescriptor,
-    parent_rust_path: String,
-) {
-    map.insert(
-        format!(".{}", message.full_name()),
-        format!(
-            "{}::{}",
-            parent_rust_path,
-            message.name().to_case(Case::UpperCamel)
-        ),
-    );
-
-    for nested in message.nested_messages() {
-        collect_messages_recursive(
-            map,
-            nested,
-            format!(
-                "{}::{}",
-                parent_rust_path,
-                message.name().to_case(Case::Snake)
-            ),
-        );
-    }
 }

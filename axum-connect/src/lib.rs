@@ -1,12 +1,12 @@
-// Re-export protobuf and protobuf_json_mapping for downstream use.
-pub use protobuf;
-pub use protobuf_json_mapping;
-
 pub mod error;
 pub mod handler;
 pub mod parts;
 pub mod response;
 pub mod router;
+
+// Re-export both prost and serde.
+pub use prost;
+pub use serde;
 
 pub mod prelude {
     pub use crate::error::*;

@@ -2,10 +2,8 @@ use std::pin::Pin;
 
 use axum::{body::HttpBody, extract::FromRequest, http::Request, BoxError};
 use futures::Future;
-use protobuf::MessageFull;
-
-pub use protobuf;
-pub use protobuf_json_mapping;
+use prost::Message;
+use serde::{de::DeserializeOwned, Serialize};
 
 pub use crate::{error::RpcIntoError, parts::RpcFromRequestParts, response::RpcIntoResponse};
 use crate::{
@@ -19,14 +17,13 @@ pub trait HandlerFuture<TReq, TRes, Res, T, S, B>: Clone + Send + Sized + 'stati
     fn call(self, req: Request<B>, state: S) -> Self::Future;
 }
 
-// This is a single expanded version of the macro below. It's left here for ease of reading and
-// understanding the macro, as well as development.
-// ```rust
+// This is here because writing Rust macros sucks a**. So I uncomment this when I'm trying to modify
+// the below macro.
 // #[allow(unused_parens, non_snake_case, unused_mut)]
 // impl<TReq, TRes, Res, F, Fut, S, B, T1> HandlerFuture<TReq, TRes, Res, (T1, TReq), S, B> for F
 // where
-//     TReq: MessageFull + Send + 'static,
-//     TRes: MessageFull + Send + 'static,
+//     TReq: Message + DeserializeOwned + Send + 'static,
+//     TRes: Message + Serialize + Send + 'static,
 //     Res: RpcIntoResponse<TRes>,
 //     F: FnOnce(T1, TReq) -> Fut + Clone + Send + 'static,
 //     Fut: Future<Output = Res> + Send,
@@ -58,7 +55,7 @@ pub trait HandlerFuture<TReq, TRes, Res, T, S, B>: Clone + Send + Sized + 'stati
 //                 }
 //             };
 
-//             let proto_req: TReq = match protobuf_json_mapping::parse_from_str(&body) {
+//             let proto_req: TReq = match serde_json::from_str(&body) {
 //                 Ok(value) => value,
 //                 Err(_e) => {
 //                     return RpcError::new(
@@ -75,7 +72,7 @@ pub trait HandlerFuture<TReq, TRes, Res, T, S, B>: Clone + Send + Sized + 'stati
 //         })
 //     }
 // }
-// ```
+
 macro_rules! impl_handler {
     (
         [$($ty:ident),*]
@@ -84,8 +81,8 @@ macro_rules! impl_handler {
         impl<TReq, TRes, Res, F, Fut, S, B, $($ty,)*>
             HandlerFuture<TReq, TRes, Res, ($($ty,)* TReq), S, B> for F
         where
-            TReq: MessageFull + Send + 'static,
-            TRes: MessageFull + Send + 'static,
+            TReq: Message + DeserializeOwned + Send + 'static,
+            TRes: Message + Serialize + Send + 'static,
             Res: RpcIntoResponse<TRes>,
             F: FnOnce($($ty,)* TReq) -> Fut + Clone + Send + 'static,
             Fut: Future<Output = Res> + Send,
@@ -119,7 +116,7 @@ macro_rules! impl_handler {
                         }
                     };
 
-                    let proto_req: TReq = match protobuf_json_mapping::parse_from_str(&body) {
+                    let proto_req: TReq = match serde_json::from_str(&body) {
                         Ok(value) => value,
                         Err(_e) => {
                             return RpcError::new(

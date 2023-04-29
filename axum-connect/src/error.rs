@@ -2,7 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use protobuf::MessageFull;
+use prost::Message;
 use serde::Serialize;
 
 use crate::{prelude::RpcResponse, response::RpcIntoResponse};
@@ -103,7 +103,7 @@ impl From<RpcErrorCode> for StatusCode {
 
 impl<T> RpcIntoResponse<T> for RpcErrorCode
 where
-    T: MessageFull,
+    T: Message,
 {
     fn rpc_into_response(self) -> RpcResponse<T> {
         RpcResponse {
@@ -115,7 +115,7 @@ where
 
 impl<T> RpcIntoResponse<T> for RpcError
 where
-    T: MessageFull,
+    T: Message,
 {
     fn rpc_into_response(self) -> RpcResponse<T> {
         RpcResponse {

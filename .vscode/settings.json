@@ -2,9 +2,13 @@
   "cSpell.words": [
     "bufbuild",
     "codegen",
+    "impls",
+    "pbjson",
+    "prost",
     "proto",
     "protobuf",
     "protoc",
+    "protos",
     "serde",
     "Thilenius",
     "typecheck"

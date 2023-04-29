@@ -2,10 +2,12 @@ use std::net::SocketAddr;
 
 use axum::{extract::Host, Router};
 use axum_connect::prelude::*;
-use proto::hello::{HelloRequest, HelloResponse, HelloWorldService};
+use proto::hello::*;
 
 mod proto {
-    include!(concat!(env!("OUT_DIR"), "/connect_proto_gen/mod.rs"));
+    pub mod hello {
+        include!(concat!(env!("OUT_DIR"), "/hello.rs"));
+    }
 }
 
 #[tokio::main]
@@ -30,6 +32,5 @@ async fn say_hello_success(Host(host): Host, request: HelloRequest) -> HelloResp
             "Hello {}! You're addressing the hostname: {}.",
             request.name, host
         ),
-        special_fields: Default::default(),
     }
 }

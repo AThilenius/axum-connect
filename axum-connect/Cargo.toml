@@ -17,7 +17,6 @@ repository = "https://github.com/AThilenius/axum-connect"
 async-trait = "0.1.64"
 axum = "0.6.9"
 futures = "0.3.26"
-protobuf = "3.2.0"
-protobuf-json-mapping = "3.2.0"
+prost = "0.11.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -6,7 +6,7 @@ use axum::{
     http::{self},
     Extension,
 };
-use protobuf::MessageFull;
+use prost::Message;
 use serde::de::DeserializeOwned;
 
 use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
@@ -14,7 +14,7 @@ use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
 #[async_trait]
 pub trait RpcFromRequestParts<T, S>: Sized
 where
-    T: MessageFull,
+    T: Message,
     S: Send + Sync,
 {
     /// If the extractor fails it'll use this "rejection" type. A rejection is
@@ -31,7 +31,7 @@ where
 #[async_trait]
 impl<M, S> RpcFromRequestParts<M, S> for Host
 where
-    M: MessageFull,
+    M: Message,
     S: Send + Sync,
 {
     type Rejection = RpcError;
@@ -49,7 +49,7 @@ where
 #[async_trait]
 impl<M, S, T> RpcFromRequestParts<M, S> for Query<T>
 where
-    M: MessageFull,
+    M: Message,
     S: Send + Sync,
     T: DeserializeOwned,
 {
@@ -68,7 +68,7 @@ where
 #[async_trait]
 impl<M, S, T> RpcFromRequestParts<M, S> for ConnectInfo<T>
 where
-    M: MessageFull,
+    M: Message,
     S: Send + Sync,
     T: Clone + Send + Sync + 'static,
 {
@@ -91,7 +91,7 @@ where
 #[async_trait]
 impl<M, OuterState, InnerState> RpcFromRequestParts<M, OuterState> for State<InnerState>
 where
-    M: MessageFull,
+    M: Message,
     InnerState: FromRef<OuterState>,
     OuterState: Send + Sync,
 {

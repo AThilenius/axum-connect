@@ -1,5 +1,6 @@
 use axum::response::{IntoResponse, Response};
-use protobuf::MessageFull;
+use prost::Message;
+use serde::Serialize;
 
 use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
 
@@ -12,12 +13,12 @@ pub struct RpcResponse<T> {
 
 impl<T> IntoResponse for RpcResponse<T>
 where
-    T: MessageFull,
+    T: Message + Serialize,
 {
     fn into_response(self) -> Response {
         let rpc_call_response: Response = {
             match self.response {
-                Ok(value) => protobuf_json_mapping::print_to_string(&value)
+                Ok(value) => serde_json::to_string(&value)
                     .map_err(|_e| {
                         RpcError::new(
                             RpcErrorCode::Internal,
@@ -43,14 +44,14 @@ where
 
 pub trait RpcIntoResponse<T>: Send + Sync + 'static
 where
-    T: MessageFull,
+    T: Message,
 {
     fn rpc_into_response(self) -> RpcResponse<T>;
 }
 
 impl<T> RpcIntoResponse<T> for T
 where
-    T: MessageFull,
+    T: Message + 'static,
 {
     fn rpc_into_response(self) -> RpcResponse<T> {
         RpcResponse {
@@ -62,7 +63,7 @@ where
 
 impl<T, E> RpcIntoResponse<T> for Result<T, E>
 where
-    T: MessageFull,
+    T: Message + 'static,
     E: RpcIntoError + Send + Sync + 'static,
 {
     fn rpc_into_response(self) -> RpcResponse<T> {
