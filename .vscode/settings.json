@@ -2,6 +2,7 @@
   "cSpell.words": [
     "bufbuild",
     "codegen",
+    "DTLS",
     "impls",
     "pbjson",
     "prost",
@@ -9,7 +10,9 @@
     "protobuf",
     "protoc",
     "protos",
+    "Roadmap",
     "serde",
+    "SRTP",
     "Thilenius",
     "typecheck"
   ]

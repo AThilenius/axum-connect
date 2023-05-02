@@ -30,7 +30,8 @@ async fn say_hello_success(Host(host): Host, request: HelloRequest) -> HelloResp
     HelloResponse {
         message: format!(
             "Hello {}! You're addressing the hostname: {}.",
-            request.name, host
+            request.name.unwrap_or_else(|| "unnamed".to_string()),
+            host
         ),
     }
 }

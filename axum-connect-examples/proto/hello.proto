@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package hello;
 
-message HelloRequest { string name = 1; }
+message HelloRequest { optional string name = 1; }
 
 message HelloResponse { string message = 1; }
 

@@ -34,24 +34,14 @@ _Prior knowledge with [Protobuf](https://github.com/protocolbuffers/protobuf)
 (both the IDL and it's use in RPC frameworks) and
 [Axum](https://github.com/tokio-rs/axum) are assumed._
 
-## Dependencies 🙄
+## Dependencies 👀
 
-Axum-connect uses [prost](https://github.com/tokio-rs/prost) for much of it's
-protobuf manipulation. Prost sopped shipping `protoc` so you'll need to install
-that manually, see the [grpc protoc install
-instruction](https://grpc.io/docs/protoc-installation/). Alternatively there are
-crates that ship pre-built protoc binaries.
-
-```sh
-# On Debian systems
-sudo apt install protobuf-compiler
-```
-
-You'll need 2 axum-connect crates, one for code-gen and one for runtime use.
+You'll need 2 `axum-connect` crates, one for code-gen and one for runtime use.
 Because of how prost works, you'll also need to add it to your own project.
 You'll obviously also need `axum` and `tokio`.
 
 ```sh
+# Note: axum-connect-build will fetch `protoc` for you.
 cargo add --build axum-connect-build
 cargo add axum-connect prost axum
 cargo add tokio --features full
@@ -88,10 +78,15 @@ Use the `axum_connect_codegen` crate to generate Rust code from the proto IDL.
 `build.rs`
 
 ```rust
-use axum_connect_build::axum_connect_codegen;
+use axum_connect_build::{axum_connect_codegen, AxumConnectGenSettings};
 
 fn main() {
-    axum_connect_codegen(&["proto"], &["proto/hello.proto"]).unwrap();
+    // This helper will use `proto` as the import path, and globs all .proto
+    // files in the `proto` directory. You can build an AxumConnectGenSettings
+    // manually too, if you wish.
+    let settings = AxumConnectGenSettings::from_directory_recursive("proto")
+        .expect("failed to glob proto files");
+    axum_connect_codegen(settings).unwrap();
 }
 ```
 
@@ -170,7 +165,7 @@ API with end-to-end typed RPCs.
 - Possibly maybe-someday support BiDi streaming over WebRTC
   - This would require `connect-web` picking up support for the same
   - WebRTC streams because they are DTLS/SRTP and are resilient
-- Replace Prost
+- Replace Prost (with something custom and simpler)
 
 ## Non-goals
 
@@ -183,6 +178,34 @@ API with end-to-end typed RPCs.
     nothing else.
   - This is idiomatic Rust. Do one thing well, and leave the rest to other
     crates.
+
+# Prost and Protobuf
+
+## Protoc Version
+
+The installed version of `protoc` can be configured in the
+`AxumConnectGenSettings` if you need/wish to do so. Setting the value to `None`
+will disable the download entirely.
+
+## Reasoning
+
+Prost stopped shipping `protoc` binaries (a decision I disagree with) so
+`axum-connect-build` internally uses
+[protoc-fetcher](https://crates.io/crates/protoc-fetcher) download and resolve a
+copy of `protoc`. This is far more turnkey than forcing every build environment
+(often Heroku and/or Docker) to have a recent `protoc` binary pre-installed.
+
+Prost removed it in the name of security, but I fail to see how executing a
+hash-checked crate as part of your build is any less dangerous than executing a
+hash-checked binary as part of your build. Both get to run binary code on your
+build machine. This behavior can be disabled of you disagree, if you need to
+comply with corporate policy, or your build environment is offline.
+
+I would someday like to replace all of it with a new 'lean and
+mean' protoc library for the Rust community. One with a built-in parser, that
+supports only the latest proto3 syntax as well as the canonical JSON
+serialization format and explicitly doesn't support many of the rarely used
+features. But that day is not today.
 
 # Versioning
 

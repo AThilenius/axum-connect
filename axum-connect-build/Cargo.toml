@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect-build"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
@@ -22,5 +22,6 @@ proc-macro2 = "1.0.56"
 prost = "0.11.9"
 prost-build = "0.11.9"
 prost-reflect = "0.11.4"
+protoc-fetcher = "0.1.0"
 quote = "1.0.26"
 syn = "2.0.15"
