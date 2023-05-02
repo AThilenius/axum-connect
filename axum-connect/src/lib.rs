@@ -4,7 +4,9 @@ pub mod parts;
 pub mod response;
 pub mod router;
 
-// Re-export both prost and serde.
+// Re-export several crates
+pub use pbjson;
+pub use pbjson_types;
 pub use prost;
 pub use serde;
 

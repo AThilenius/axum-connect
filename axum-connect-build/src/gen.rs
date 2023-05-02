@@ -69,9 +69,4 @@ impl ServiceGenerator for AxumConnectServiceGenerator {
     fn generate(&mut self, service: Service, buf: &mut String) {
         self.generate_service(service, buf);
     }
-
-    fn finalize(&mut self, buf: &mut String) {
-        // Add serde import (because that's less effort than hacking pbjson).
-        buf.push_str("\nuse axum_connect::serde;\n");
-    }
 }

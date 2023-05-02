@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect-build"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [

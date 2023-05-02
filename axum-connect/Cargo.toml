@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
@@ -19,6 +19,7 @@ async-trait = "0.1.64"
 axum = "0.6.9"
 futures = "0.3.26"
 pbjson = "0.5.1"
+pbjson-types = "0.5.1"
 prost = "0.11.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

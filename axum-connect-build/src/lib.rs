@@ -1,7 +1,10 @@
 use std::{
+    cell::RefCell,
     env,
     io::{BufWriter, Write},
+    ops::Deref,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use gen::AxumConnectServiceGenerator;
@@ -74,7 +77,7 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
     // Standard prost configuration
     conf.compile_well_known_types();
     conf.file_descriptor_set_path(&descriptor_path);
-    conf.extern_path(".google.protobuf", "::pbjson_types");
+    conf.extern_path(".google.protobuf", "::axum_connect::pbjson_types");
     conf.service_generator(Box::new(AxumConnectServiceGenerator::new()));
 
     // Arg configuration
@@ -91,10 +94,15 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
     let mut output: PathBuf = PathBuf::from(env::var("OUT_DIR").unwrap());
     output.push("FILENAME");
 
+    // TODO: This is a nasty hack. Get rid of it. Idk how without dumping Prost and pbjson though.
+    let files = Rc::new(RefCell::new(vec![]));
+
+    let files_c = files.clone();
     let writers = pbjson_build::Builder::new()
         .register_descriptors(&descriptor_set)?
         .generate(&["."], move |package| {
             output.set_file_name(format!("{}.rs", package));
+            files_c.deref().borrow_mut().push(output.clone());
 
             let file = std::fs::OpenOptions::new().append(true).open(&output)?;
 
@@ -103,6 +111,15 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
 
     for (_, mut writer) in writers {
         writer.flush()?;
+    }
+
+    // Now second part of the nasty hack, replace a few namespaces with re-exported ones.
+    for file in files.take().into_iter() {
+        let contents = std::fs::read_to_string(&file)?;
+        let contents = contents.replace("pbjson::", "axum_connect::pbjson::");
+        let contents = contents.replace("prost::", "axum_connect::prost::");
+        let contents = contents.replace("serde::", "axum_connect::serde::");
+        std::fs::write(&file, contents)?;
     }
 
     Ok(())
