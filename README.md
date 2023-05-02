@@ -6,8 +6,8 @@ framework](https://connect.build/docs/introduction) to Rust via idiomatic
 
 # Alpha software ⚠️
 
-Project is under active development for internal use, but minor revision bumps
-are often breaking.
+Project is under active development for internal use; minor revision bumps are
+often breaking.
 
 # Features 🔍
 
@@ -92,7 +92,7 @@ fn main() {
 
 ## The Fun Part 😁
 
-With the boring stuff out of the way, let's implement out service using Axum!
+With the boring stuff out of the way, let's implement our service using Axum!
 
 ```rust
 use std::net::SocketAddr;
@@ -109,9 +109,10 @@ mod proto {
 
 #[tokio::main]
 async fn main() {
-    // Build our application with a route. Note the `rpc` method which was added by `axum-connect`.
-    // It expect a service method handler, wrapped in it's respective type. The handler (below) is
-    // just a normal Rust function. Just like Axum, it also supports extractors!
+    // Build our application with a route. Note the `rpc` method which was added
+    // by `axum-connect`. It expect a service method handler, wrapped in it's
+    // respective type. The handler (below) is just a normal Rust function. Just
+    // like Axum, it also supports extractors!
     let app = Router::new().rpc(HelloWorldService::say_hello(say_hello_success));
 
     // Axum boilerplate to start the server.
@@ -123,7 +124,10 @@ async fn main() {
         .unwrap();
 }
 
-async fn say_hello_success(Host(host): Host, request: HelloRequest) -> HelloResponse {
+async fn say_hello_success(
+  Host(host): Host,
+  request: HelloRequest
+) -> HelloResponse {
     HelloResponse {
         message: format!(
             "Hello {}! You're addressing the hostname: {}.",
@@ -146,7 +150,7 @@ curl --location 'http://localhost:3030/hello.HelloWorldService/SayHello' \
 From here you can stand up a `connect-web` TypeScript/Go project to call your
 API with end-to-end typed RPCs.
 
-# Roadmap / Stated Non-Goals
+# Roadmap / Stated Non-Goals 🛣️
 
 - Binary proto encoding based on HTTP `content-type`
 - Streaming server RPC responses
@@ -156,7 +160,7 @@ API with end-to-end typed RPCs.
 - Comprehensive tests
 - A first-stable launch
 
-## More Distant Goals
+## More Distant Goals 🌜
 
 - I would love to also support a WASM-ready client library
 - Use `buf.build` to support remote codegen and streamlined proto handling
@@ -167,7 +171,7 @@ API with end-to-end typed RPCs.
   - WebRTC streams because they are DTLS/SRTP and are resilient
 - Replace Prost (with something custom and simpler)
 
-## Non-goals
+## Non-goals 🙅
 
 - To support every feature gRPC does
   - You get a lot of this already with Axum, but gRPC is a monster that I
@@ -179,7 +183,7 @@ API with end-to-end typed RPCs.
   - This is idiomatic Rust. Do one thing well, and leave the rest to other
     crates.
 
-# Prost and Protobuf
+# Prost and Protobuf 📖
 
 ## Protoc Version
 
@@ -194,12 +198,8 @@ Prost stopped shipping `protoc` binaries (a decision I disagree with) so
 [protoc-fetcher](https://crates.io/crates/protoc-fetcher) download and resolve a
 copy of `protoc`. This is far more turnkey than forcing every build environment
 (often Heroku and/or Docker) to have a recent `protoc` binary pre-installed.
-
-Prost removed it in the name of security, but I fail to see how executing a
-hash-checked crate as part of your build is any less dangerous than executing a
-hash-checked binary as part of your build. Both get to run binary code on your
-build machine. This behavior can be disabled of you disagree, if you need to
-comply with corporate policy, or your build environment is offline.
+This behavior can be disabled of you disagree, if you need to comply with
+corporate policy, or your build environment is offline.
 
 I would someday like to replace all of it with a new 'lean and
 mean' protoc library for the Rust community. One with a built-in parser, that
@@ -207,7 +207,7 @@ supports only the latest proto3 syntax as well as the canonical JSON
 serialization format and explicitly doesn't support many of the rarely used
 features. But that day is not today.
 
-# Versioning
+# Versioning 🔢
 
 `axum-connect` and `axum-connect-build` versions are currently **not** kept in
 lockstep. They will be once I get to beta. Right now the versions mean nothing
