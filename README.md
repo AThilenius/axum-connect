@@ -198,8 +198,8 @@ Prost stopped shipping `protoc` binaries (a decision I disagree with) so
 [protoc-fetcher](https://crates.io/crates/protoc-fetcher) download and resolve a
 copy of `protoc`. This is far more turnkey than forcing every build environment
 (often Heroku and/or Docker) to have a recent `protoc` binary pre-installed.
-This behavior can be disabled of you disagree, if you need to comply with
-corporate policy, or your build environment is offline.
+This behavior can be disabled if you disagree, you need to comply with corporate
+policy, or your build environment is offline.
 
 I would someday like to replace all of it with a new 'lean and
 mean' protoc library for the Rust community. One with a built-in parser, that
