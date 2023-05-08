@@ -15,5 +15,6 @@
     "SRTP",
     "Thilenius",
     "typecheck"
-  ]
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false
 }

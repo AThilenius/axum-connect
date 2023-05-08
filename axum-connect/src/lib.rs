@@ -5,6 +5,7 @@ pub mod response;
 pub mod router;
 
 // Re-export several crates
+pub use futures;
 pub use pbjson;
 pub use pbjson_types;
 pub use prost;

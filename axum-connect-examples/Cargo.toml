@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-stream = "0.3.5"
 axum = "0.6.9"
 axum-connect = { path = "../axum-connect" }
 prost = "0.11.9"

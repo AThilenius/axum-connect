@@ -1,11 +1,8 @@
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use axum::http::StatusCode;
 use prost::Message;
 use serde::Serialize;
 
-use crate::{prelude::RpcResponse, response::RpcIntoResponse};
+use crate::{prelude::RpcResult, response::RpcIntoResponse};
 
 #[derive(Clone, Serialize)]
 pub struct RpcError {
@@ -105,11 +102,8 @@ impl<T> RpcIntoResponse<T> for RpcErrorCode
 where
     T: Message,
 {
-    fn rpc_into_response(self) -> RpcResponse<T> {
-        RpcResponse {
-            response: Err(RpcError::new(self, "".to_string())),
-            parts: Response::default(),
-        }
+    fn rpc_into_response(self) -> RpcResult<T> {
+        Err(RpcError::new(self, "".to_string()))
     }
 }
 
@@ -117,18 +111,16 @@ impl<T> RpcIntoResponse<T> for RpcError
 where
     T: Message,
 {
-    fn rpc_into_response(self) -> RpcResponse<T> {
-        RpcResponse {
-            response: Err(self),
-            parts: Response::default(),
-        }
+    fn rpc_into_response(self) -> RpcResult<T> {
+        Err(self)
     }
 }
 
-impl IntoResponse for RpcError {
-    fn into_response(self) -> Response {
-        let status_code = StatusCode::from(self.code.clone());
-        let json = serde_json::to_string(&self).expect("serialize error type");
-        (status_code, json).into_response()
-    }
-}
+// TODO: This needs to be done in the handler to support streaming errors.
+// impl IntoResponse for RpcError {
+//     fn into_response(self) -> Response {
+//         let status_code = StatusCode::from(self.code.clone());
+//         let json = serde_json::to_string(&self).expect("serialize error type");
+//         (status_code, json).into_response()
+//     }
+// }

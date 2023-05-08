@@ -1,63 +1,22 @@
-use axum::response::{IntoResponse, Response};
 use prost::Message;
-use serde::Serialize;
 
-use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
+use crate::error::{RpcError, RpcIntoError};
 
-pub type RpcResult<T> = Result<T, RpcError>;
-
-pub struct RpcResponse<T> {
-    pub(crate) response: RpcResult<T>,
-    pub(crate) parts: Response,
-}
-
-impl<T> IntoResponse for RpcResponse<T>
-where
-    T: Message + Serialize,
-{
-    fn into_response(self) -> Response {
-        let rpc_call_response: Response = {
-            match self.response {
-                Ok(value) => serde_json::to_string(&value)
-                    .map_err(|_e| {
-                        RpcError::new(
-                            RpcErrorCode::Internal,
-                            "Failed to serialize response".to_string(),
-                        )
-                    })
-                    .into_response(),
-                Err(e) => e.into_response(),
-            }
-        };
-
-        let (mut parts, _) = self.parts.into_parts();
-
-        // Add Content-Type JSON header to parts.
-        parts.headers.insert(
-            "Content-Type",
-            "application/json".parse().expect("Wrong MIME type"),
-        );
-
-        (parts, rpc_call_response).into_response()
-    }
-}
+pub type RpcResult<M> = Result<M, RpcError>;
 
 pub trait RpcIntoResponse<T>: Send + Sync + 'static
 where
     T: Message,
 {
-    fn rpc_into_response(self) -> RpcResponse<T>;
+    fn rpc_into_response(self) -> RpcResult<T>;
 }
 
 impl<T> RpcIntoResponse<T> for T
 where
     T: Message + 'static,
 {
-    fn rpc_into_response(self) -> RpcResponse<T> {
-        RpcResponse {
-            response: Ok(self),
-            parts: Response::default(),
-        }
+    fn rpc_into_response(self) -> RpcResult<T> {
+        Ok(self)
     }
 }
 
@@ -66,10 +25,7 @@ where
     T: Message + 'static,
     E: RpcIntoError + Send + Sync + 'static,
 {
-    fn rpc_into_response(self) -> RpcResponse<T> {
-        match self {
-            Ok(res) => res.rpc_into_response(),
-            Err(err) => err.rpc_into_error().rpc_into_response(),
-        }
+    fn rpc_into_response(self) -> RpcResult<T> {
+        self.map_err(|e| e.rpc_into_error())
     }
 }
