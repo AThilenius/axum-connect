@@ -100,11 +100,12 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
     let files_c = files.clone();
     let writers = pbjson_build::Builder::new()
         .register_descriptors(&descriptor_set)?
+        .extern_path(".google.protobuf", "::axum_connect::pbjson_types")
         .generate(&["."], move |package| {
             output.set_file_name(format!("{}.rs", package));
             files_c.deref().borrow_mut().push(output.clone());
 
-            let file = std::fs::OpenOptions::new().append(true).open(&output)?;
+            let file = std::fs::OpenOptions::new().append(true).create(true).open(&output)?;
 
             Ok(BufWriter::new(file))
         })?;
