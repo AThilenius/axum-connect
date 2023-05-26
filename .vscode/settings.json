@@ -1,10 +1,13 @@
 {
   "cSpell.words": [
+    "Buf's",
     "bufbuild",
     "codegen",
+    "concat",
     "DTLS",
     "impls",
     "pbjson",
+    "println",
     "prost",
     "proto",
     "protobuf",

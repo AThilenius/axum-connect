@@ -150,14 +150,39 @@ curl --location 'http://localhost:3030/hello.HelloWorldService/SayHello' \
 From here you can stand up a `connect-web` TypeScript/Go project to call your
 API with end-to-end typed RPCs.
 
+## Request/Response Parts
+
+Both the request and response types are derived in `axum-connect`. This might
+seem redundant at first.
+
+Let's go over the easier one first, `RpcIntoResponse`. Connect RPCs are not
+arbitrary HTML requests, they cannot return arbitrary HTML responses. For
+example, streaming responses MUST return an HTTP 200 regardless of error state.
+Keeping with Axum's (fantastic) paradigm, that is enforced by the type system.
+RPC handler may not return arbitrary HTML, but instead must return something
+that `axum-connect` knows how to turn into a valid Connect response.
+
+Somewhat less intuitively, `axum-connect` derives `RpcFromRequestParts`, which
+is _almost_ identical to Axum's `FromRequestParts`. Importantly though,
+`FromRequestParts` can return back an error of arbitrary HTML responses, which
+is a problem for the same reason.
+
+Axum also allows a `FromRequest` to occupy the last parameter in a handler which
+consumed the remainder of the HTTP request (including the body). `axum-connect`
+needs to handle the response input itself, so there is no equivalent for RPCs
+handlers.
+
 # Roadmap / Stated Non-Goals 🛣️
 
-- Binary proto encoding based on HTTP `content-type`
-- Streaming server RPC responses
-- Bring everything in-line with `connect-web`
+- Explore better typing that `RpcFromRequestParts`
+  - Ideally clients only need to provide an `RpcIntoError`, but I haven't fully
+    thought this problem though. I just know that having to specific both a
+    `FromRequestParts` and an `RpcFromRequestParts` on custom types is a PITA.
+- Rework error responses to allow for multiple errors
 - Version checking between generated and runtime code
 - A plan for forward-compatibility
-- Comprehensive tests
+- Bring everything in-line with `connect-web` and...
+- Comprehensive integration tests
 - A first-stable launch
 
 ## More Distant Goals 🌜
