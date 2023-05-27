@@ -1,0 +1,35 @@
+{
+  "name": "frontend",
+  "version": "0.0.1",
+  "description": "Web frontend SPA to test axum-connect RPCs",
+  "author": "Alec Thilenius",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "build": "tsc --noEmit && npx vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AThilenius/axum-connect.git"
+  },
+  "keywords": [
+    "connect-web"
+  ],
+  "bugs": {
+    "url": "https://github.com/AThilenius/axum-connect/issues"
+  },
+  "homepage": "https://github.com/AThilenius/axum-connect#readme",
+  "dependencies": {
+    "@buf/grpc_grpc.bufbuild_connect-es": "^0.9.0-20230516211939-d8bc6b0fb32a.1",
+    "@bufbuild/connect": "^0.9.0",
+    "@bufbuild/connect-web": "^0.9.0",
+    "vite": "^4.3.9"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.19.0-1",
+    "@bufbuild/protoc-gen-connect-es": "^0.9.0",
+    "@bufbuild/protoc-gen-es": "^1.2.0",
+    "typescript": "^5.0.4"
+  }
+}
