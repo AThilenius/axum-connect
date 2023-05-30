@@ -1,5 +1,6 @@
 pub mod error;
 pub mod handler;
+mod message;
 pub mod parts;
 pub mod response;
 pub mod router;
@@ -13,6 +14,7 @@ pub use serde;
 
 pub mod prelude {
     pub use crate::error::*;
+    pub use crate::message::*;
     pub use crate::parts::*;
     pub use crate::response::*;
     pub use crate::router::RpcRouterExt;

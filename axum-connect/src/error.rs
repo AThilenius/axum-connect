@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use base_62::base62;
 use prost::Message;
 use serde::Serialize;
 
@@ -51,7 +52,27 @@ pub struct RpcErrorDetail {
     pub proto_type: String,
     #[serde(rename = "value")]
     pub proto_b62_value: String,
+    #[serde(rename = "debug")]
+    pub debug_json: Box<serde_json::value::RawValue>,
 }
+
+// impl<M> From<M> for RpcErrorDetail
+// where
+//     M: Message + Serialize,
+// {
+//     fn from(val: M) -> Self {
+//         let binary = M::encode_to_vec(&val.1);
+//         // Encode as base62
+//         let b62 = base62::encode(&binary);
+//         let json = serde_json::to_string(&val.1).unwrap();
+
+//         Self {
+//             M::
+//             proto_b62_value: b62,
+//             debug_json: serde_json::value::RawValue::from_string(json).unwrap(),
+//         }
+//     }
+// }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -115,12 +136,3 @@ where
         Err(self)
     }
 }
-
-// TODO: This needs to be done in the handler to support streaming errors.
-// impl IntoResponse for RpcError {
-//     fn into_response(self) -> Response {
-//         let status_code = StatusCode::from(self.code.clone());
-//         let json = serde_json::to_string(&self).expect("serialize error type");
-//         (status_code, json).into_response()
-//     }
-// }
