@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 
-use gen::AxumConnectServiceGenerator;
+pub use gen::AxumConnectServiceGenerator;
 
 mod gen;
 
@@ -105,7 +105,10 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
             output.set_file_name(format!("{}.rs", package));
             files_c.deref().borrow_mut().push(output.clone());
 
-            let file = std::fs::OpenOptions::new().append(true).create(true).open(&output)?;
+            let file = std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&output)?;
 
             Ok(BufWriter::new(file))
         })?;
