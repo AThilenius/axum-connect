@@ -4,11 +4,6 @@ Brings the protobuf-based [Connect-Web RPC
 framework](https://connect.build/docs/introduction) to Rust via idiomatic
 [Axum](https://github.com/tokio-rs/axum).
 
-# Alpha software ⚠️
-
-Project is under active development for internal use; minor revision bumps are
-often breaking.
-
 # Features 🔍
 
 - Integrates into existing Axum HTTP applications seamlessly
@@ -27,6 +22,16 @@ often breaking.
 - Codegen from `*.proto` files in a separate crate.
 - All the other amazing benefits that come with Axum, like the community,
   documentation and performance!
+
+# Caution ⚠️
+
+We use `axum-connect` in production, but I don't kow that anyone with more sense
+does. It's written in Rust which obviously offers some amazing compiler
+guarantees, but it's not well tested or battle-proven yet. Do what you will with
+that information.
+
+Please let me know if you're using `axum-connect`! And open issues if you find a
+bug.
 
 # Getting Started 🤓
 
@@ -82,10 +87,14 @@ use axum_connect_build::{axum_connect_codegen, AxumConnectGenSettings};
 
 fn main() {
     // This helper will use `proto` as the import path, and globs all .proto
-    // files in the `proto` directory. You can build an AxumConnectGenSettings
-    // manually too, if you wish.
+    // files in the `proto` directory.
+    //
+    // Note that you might need to re-save the `build.rs` file after updating
+    // a proto file to get rust-analyzer to pickup the change. I haven't put
+    // time into looking for a fix to that yet.
     let settings = AxumConnectGenSettings::from_directory_recursive("proto")
         .expect("failed to glob proto files");
+
     axum_connect_codegen(settings).unwrap();
 }
 ```
@@ -183,7 +192,6 @@ handlers.
 - A plan for forward-compatibility
 - Bring everything in-line with `connect-web` and...
 - Comprehensive integration tests
-- A first-stable launch
 
 ## More Distant Goals 🌜
 
@@ -220,23 +228,17 @@ will disable the download entirely.
 
 Prost stopped shipping `protoc` binaries (a decision I disagree with) so
 `axum-connect-build` internally uses
-[protoc-fetcher](https://crates.io/crates/protoc-fetcher) download and resolve a
-copy of `protoc`. This is far more turnkey than forcing every build environment
-(often Heroku and/or Docker) to have a recent `protoc` binary pre-installed.
-This behavior can be disabled if you disagree, you need to comply with corporate
-policy, or your build environment is offline.
+[protoc-fetcher](https://crates.io/crates/protoc-fetcher) to download and
+resolve a copy of `protoc`. This is far more turnkey than forcing every build
+environment (often Heroku and/or Docker) to have a recent `protoc` binary
+pre-installed. This behavior can be disabled if you disagree, or if you need to
+comply with corporate policy, or your build environment is offline.
 
 I would someday like to replace all of it with a new 'lean and
 mean' protoc library for the Rust community. One with a built-in parser, that
 supports only the latest proto3 syntax as well as the canonical JSON
 serialization format and explicitly doesn't support many of the rarely used
 features. But that day is not today.
-
-# Versioning 🔢
-
-`axum-connect` and `axum-connect-build` versions are currently **not** kept in
-lockstep. They will be once I get to beta. Right now the versions mean nothing
-more than 'Alec pushed a new change'.
 
 # License 🧾
 

@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect-build"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
@@ -17,11 +17,11 @@ repository = "https://github.com/AThilenius/axum-connect"
 [dependencies]
 anyhow = "1.0"
 convert_case = "0.6.0"
-pbjson-build = "0.5.1"
+pbjson-build = "0.6.2"
 proc-macro2 = "1.0.56"
-prost = "0.11.9"
-prost-build = "0.11.9"
-prost-reflect = "0.11.4"
+prost = "0.12.1"
+prost-build = "0.12.1"
+prost-reflect = "0.12.0"
 protoc-fetcher = "0.1.0"
 quote = "1.0.26"
 syn = "2.0.15"
