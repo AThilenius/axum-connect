@@ -48,23 +48,20 @@ impl AxumConnectServiceGenerator {
 
         if method.server_streaming {
             quote! {
-                pub fn #method_name<T, H, S, B>(
+                pub fn #method_name<T, H, S>(
                     handler: H
-                ) -> impl FnOnce(axum::Router<S, B>) -> axum_connect::router::RpcRouter<S, B>
+                ) -> impl FnOnce(axum::Router<S>) -> axum_connect::router::RpcRouter<S>
                 where
-                    H: axum_connect::handler::RpcHandlerStream<#input_type, #output_type, T, S, B>,
+                    H: axum_connect::handler::RpcHandlerStream<#input_type, #output_type, T, S>,
                     T: 'static,
                     S: Clone + Send + Sync + 'static,
-                    B: axum::body::HttpBody + Send + 'static,
-                    B::Data: Send,
-                    B::Error: Into<axum::BoxError>,
                 {
-                    move |router: axum::Router<S, B>| {
+                    move |router: axum::Router<S>| {
                         router.route(
                             #path,
                             axum::routing::post(|
                                 axum::extract::State(state): axum::extract::State<S>,
-                                request: axum::http::Request<B>
+                                request: axum::http::Request<axum::body::Body>
                             | async move {
                                 handler.call(request, state).await
                             }),
@@ -74,23 +71,20 @@ impl AxumConnectServiceGenerator {
             }
         } else {
             quote! {
-                pub fn #method_name<T, H, S, B>(
+                pub fn #method_name<T, H, S>(
                     handler: H
-                ) -> impl FnOnce(axum::Router<S, B>) -> axum_connect::router::RpcRouter<S, B>
+                ) -> impl FnOnce(axum::Router<S>) -> axum_connect::router::RpcRouter<S>
                 where
-                    H: axum_connect::handler::RpcHandlerUnary<#input_type, #output_type, T, S, B>,
+                    H: axum_connect::handler::RpcHandlerUnary<#input_type, #output_type, T, S>,
                     T: 'static,
                     S: Clone + Send + Sync + 'static,
-                    B: axum::body::HttpBody + Send + 'static,
-                    B::Data: Send,
-                    B::Error: Into<axum::BoxError>,
                 {
-                    move |router: axum::Router<S, B>| {
+                    move |router: axum::Router<S>| {
                         router.route(
                             #path,
                             axum::routing::post(|
                                 axum::extract::State(state): axum::extract::State<S>,
-                                request: axum::http::Request<B>
+                                request: axum::http::Request<axum::body::Body>
                             | async move {
                                 handler.call(request, state).await
                             }),

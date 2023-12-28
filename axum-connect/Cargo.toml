@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
@@ -17,7 +17,7 @@ repository = "https://github.com/AThilenius/axum-connect"
 [dependencies]
 async-stream = "0.3.5"
 async-trait = "0.1.64"
-axum = "0.6.9"
+axum = { version = "0.7.2", features = ["multipart"] }
 futures = "0.3.26"
 pbjson = "0.6.0"
 pbjson-types = "0.6.0"

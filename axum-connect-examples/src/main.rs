@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use async_stream::stream;
 use axum::{extract::Host, Router};
 use axum_connect::{futures::Stream, prelude::*};
@@ -20,13 +18,11 @@ async fn main() {
         .rpc(HelloWorldService::say_hello(say_hello_success))
         .rpc(HelloWorldService::say_hello_stream(say_hello_stream));
 
-    // Axum boilerplate to start the server.
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3030));
-    println!("listening on http://{}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3030")
         .await
         .unwrap();
+    println!("listening on http://{:?}", listener.local_addr());
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn say_hello_success(Host(host): Host, request: HelloRequest) -> HelloResponse {

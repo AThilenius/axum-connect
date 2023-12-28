@@ -2,10 +2,9 @@ use std::{convert::Infallible, pin::Pin};
 
 use async_stream::stream;
 use axum::{
-    body::{HttpBody, StreamBody},
+    body::Body,
     http::{header, Request, StatusCode},
     response::{IntoResponse, Response},
-    BoxError,
 };
 use futures::{Future, Stream, StreamExt};
 use prost::Message;
@@ -22,12 +21,10 @@ use super::codec::{
     decode_check_headers, decode_request_payload, encode_error, encode_error_response, ReqResInto,
 };
 
-pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState, TBody>:
-    Clone + Send + Sized + 'static
-{
+pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
-    fn call(self, req: Request<TBody>, state: TState) -> Self::Future;
+    fn call(self, req: Request<Body>, state: TState) -> Self::Future;
 }
 
 // TODO: Get "connect-timeout-ms" (number as string) and apply timeout.
@@ -38,8 +35,8 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState, TBody>:
 // This is here because writing Rust macros sucks a**. So I uncomment this when I'm trying to modify
 // the below macro.
 // #[allow(unused_parens, non_snake_case, unused_mut)]
-// impl<TMReq, TMRes, TInto, TFnItem, TFnFut, TFn, TState, TBody, T1>
-//     RpcHandlerStream<TMReq, TMRes, (T1, TMReq), TState, TBody> for TFn
+// impl<TMReq, TMRes, TInto, TFnItem, TFnFut, TFn, TState, T1>
+//     RpcHandlerStream<TMReq, TMRes, (T1, TMReq), TState> for TFn
 // where
 //     TMReq: Message + DeserializeOwned + Default + Send + 'static,
 //     TMRes: Message + Serialize + Send + 'static,
@@ -47,15 +44,12 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState, TBody>:
 //     TFnItem: Stream<Item = TInto> + Send + Sized + 'static,
 //     TFnFut: Future<Output = TFnItem> + Send + Sync,
 //     TFn: FnOnce(T1, TMReq) -> TFnFut + Clone + Send + Sync + 'static,
-//     TBody: HttpBody + Send + Sync + 'static,
-//     TBody::Data: Send,
-//     TBody::Error: Into<BoxError>,
 //     TState: Send + Sync + 'static,
 //     T1: RpcFromRequestParts<TMRes, TState> + Send,
 // {
 //     type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-//     fn call(self, req: Request<TBody>, state: TState) -> Self::Future {
+//     fn call(self, req: Request<Body>, state: TState) -> Self::Future {
 //         Box::pin(async move {
 //             let (mut parts, body) = req.into_parts();
 
@@ -136,7 +130,7 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState, TBody>:
 //                         "application/connect+json"
 //                     },
 //                 )],
-//                 StreamBody::new(res),
+//                 Body::from_stream(res),
 //             )
 //                 .into_response()
 //         })
@@ -148,8 +142,8 @@ macro_rules! impl_handler {
         [$($ty:ident),*]
     ) => {
         #[allow(unused_parens, non_snake_case, unused_mut)]
-        impl<TMReq, TMRes, TInto, TFnItem, TFnFut, TFn, TState, TBody, $($ty,)*>
-            RpcHandlerStream<TMReq, TMRes, ($($ty,)* TMReq), TState, TBody> for TFn
+        impl<TMReq, TMRes, TInto, TFnItem, TFnFut, TFn, TState, $($ty,)*>
+            RpcHandlerStream<TMReq, TMRes, ($($ty,)* TMReq), TState> for TFn
         where
             TMReq: Message + DeserializeOwned + Default + Send + 'static,
             TMRes: Message + Serialize + Send + 'static,
@@ -157,16 +151,13 @@ macro_rules! impl_handler {
             TFnItem: Stream<Item = TInto> + Send + Sized + 'static,
             TFnFut: Future<Output = TFnItem> + Send + Sync,
             TFn: FnOnce($($ty,)* TMReq) -> TFnFut + Clone + Send + Sync + 'static,
-            TBody: HttpBody + Send + Sync + 'static,
-            TBody::Data: Send,
-            TBody::Error: Into<BoxError>,
             TState: Send + Sync + 'static,
             $( $ty: RpcFromRequestParts<TMRes, TState> + Send, )*
         {
 
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: Request<TBody>, state: TState) -> Self::Future {
+            fn call(self, req: Request<Body>, state: TState) -> Self::Future {
                 Box::pin(async move {
                     let (mut parts, body) = req.into_parts();
 
@@ -249,7 +240,7 @@ macro_rules! impl_handler {
                                 "application/connect+json"
                             },
                         )],
-                        StreamBody::new(res),
+                        Body::from_stream(res),
                     )
                         .into_response()
                 })

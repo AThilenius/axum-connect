@@ -1,10 +1,9 @@
 use std::{convert::Infallible, pin::Pin};
 
 use axum::{
-    body::HttpBody,
+    body::Body,
     http::{header, Request, StatusCode},
     response::{IntoResponse, Response},
-    BoxError,
 };
 use futures::Future;
 use prost::Message;
@@ -21,12 +20,10 @@ use super::codec::{
     decode_check_headers, decode_request_payload, encode_error_response, ReqResInto,
 };
 
-pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState, TBody>:
-    Clone + Send + Sized + 'static
-{
+pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>: Clone + Send + Sized + 'static {
     type Future: Future<Output = Response> + Send + 'static;
 
-    fn call(self, req: Request<TBody>, state: TState) -> Self::Future;
+    fn call(self, req: Request<Body>, state: TState) -> Self::Future;
 }
 
 // This is for Unary.
@@ -40,23 +37,20 @@ pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState, TBody>:
 // This is here because writing Rust macros sucks a**. So I uncomment this when I'm trying to modify
 // the below macro.
 // #[allow(unused_parens, non_snake_case, unused_mut)]
-// impl<TMReq, TMRes, TInto, TFnFut, TFn, TState, TBody, T1>
-//     RpcHandlerUnary<TMReq, TMRes, (T1, TMReq), TState, TBody> for TFn
+// impl<TMReq, TMRes, TInto, TFnFut, TFn, TState, T1>
+//     RpcHandlerUnary<TMReq, TMRes, (T1, TMReq), TState> for TFn
 // where
 //     TMReq: Message + DeserializeOwned + Default + Send + 'static,
 //     TMRes: Message + Serialize + Send + 'static,
 //     TInto: RpcIntoResponse<TMRes>,
 //     TFnFut: Future<Output = TInto> + Send,
 //     TFn: FnOnce(T1, TMReq) -> TFnFut + Clone + Send + 'static,
-//     TBody: HttpBody + Send + Sync + 'static,
-//     TBody::Data: Send,
-//     TBody::Error: Into<BoxError>,
 //     TState: Send + Sync + 'static,
 //     T1: RpcFromRequestParts<TMRes, TState> + Send,
 // {
 //     type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-//     fn call(self, req: Request<TBody>, state: TState) -> Self::Future {
+//     fn call(self, req: Request<Body>, state: TState) -> Self::Future {
 //         Box::pin(async move {
 //             let (mut parts, body) = req.into_parts();
 
@@ -127,23 +121,20 @@ macro_rules! impl_handler {
         [$($ty:ident),*]
     ) => {
         #[allow(unused_parens, non_snake_case, unused_mut)]
-        impl<TMReq, TMRes, TInto, TFnFut, TFn, TState, TBody, $($ty,)*>
-            RpcHandlerUnary<TMReq, TMRes, ($($ty,)* TMReq), TState, TBody> for TFn
+        impl<TMReq, TMRes, TInto, TFnFut, TFn, TState, $($ty,)*>
+            RpcHandlerUnary<TMReq, TMRes, ($($ty,)* TMReq), TState> for TFn
         where
             TMReq: Message + DeserializeOwned + Default + Send + 'static,
             TMRes: Message + Serialize + Send + 'static,
             TInto: RpcIntoResponse<TMRes>,
             TFnFut: Future<Output = TInto> + Send,
             TFn: FnOnce($($ty,)* TMReq) -> TFnFut + Clone + Send + 'static,
-            TBody: HttpBody + Send + Sync + 'static,
-            TBody::Data: Send,
-            TBody::Error: Into<BoxError>,
             TState: Send + Sync + 'static,
             $( $ty: RpcFromRequestParts<TMRes, TState> + Send, )*
         {
             type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
 
-            fn call(self, req: Request<TBody>, state: TState) -> Self::Future {
+            fn call(self, req: Request<Body>, state: TState) -> Self::Future {
                 Box::pin(async move {
                     let (mut parts, body) = req.into_parts();
 

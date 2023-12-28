@@ -1,9 +1,8 @@
 use axum::{
-    body::{Bytes, HttpBody},
+    body::{self, Body},
     extract::FromRequest,
     http::{header, request, Request, StatusCode},
     response::{IntoResponse, Response},
-    BoxError,
 };
 use prost::Message;
 use serde::de::DeserializeOwned;
@@ -124,8 +123,8 @@ pub(crate) fn decode_check_headers(
     Ok(ReqResInto { binary })
 }
 
-pub(crate) async fn decode_request_payload<M, S, B>(
-    req: Request<B>,
+pub(crate) async fn decode_request_payload<M, S>(
+    req: Request<Body>,
     state: &S,
     as_binary: bool,
     for_streaming: bool,
@@ -133,26 +132,21 @@ pub(crate) async fn decode_request_payload<M, S, B>(
 where
     M: Message + DeserializeOwned + Default,
     S: Send + Sync + 'static,
-    B: Send + Sync + 'static,
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<BoxError>,
 {
     // Axum-connect only supports unary request types, so we can ignore for_streaming.
     if as_binary {
-        let bytes = match Bytes::from_request(req, state).await {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                return Err(encode_error_response(
+        let bytes = body::to_bytes(req.into_body(), usize::MAX)
+            .await
+            .map_err(|e| {
+                encode_error_response(
                     &RpcError::new(
                         RpcErrorCode::InvalidArgument,
                         format!("Failed to read request body. {}", e),
                     ),
                     as_binary,
                     for_streaming,
-                ))
-            }
-        };
+                )
+            })?;
 
         let message: M = M::decode(bytes).map_err(|e| {
             encode_error_response(

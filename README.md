@@ -6,9 +6,8 @@ framework](https://connect.build/docs/introduction) to Rust via idiomatic
 
 # Axum Version
 
-> Axum `0.7` isn't yet supported, because I haven't figured out how to handle
-> streaming responses with it. Use Axum `0.6` for now. PRs welcome, and I'll get
-> it updated when I can.
+- `axum-connect:0.3` works with `axum:0.7`
+- `axum-connect:0.2` works with `axum:0.6`
 
 # Features 🔍
 
