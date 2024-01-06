@@ -1,3 +1,10 @@
+/*
+cargo run -p axum-connect-example
+
+curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%7D' -v
+curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%22name%22%3A%22foo%22%7D' -v
+*/
+
 use async_stream::stream;
 use axum::{extract::Host, Router};
 use axum_connect::{futures::Stream, prelude::*};
@@ -16,6 +23,7 @@ async fn main() {
     // just a normal Rust function. Just like Axum, it also supports extractors!
     let app = Router::new()
         .rpc(HelloWorldService::say_hello(say_hello_success))
+        .rpc(HelloWorldService::say_hello_unary_get(say_hello_success))
         .rpc(HelloWorldService::say_hello_stream(say_hello_stream));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3030")

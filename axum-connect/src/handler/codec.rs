@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use prost::Message;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::prelude::{RpcError, RpcErrorCode};
 
@@ -57,6 +57,59 @@ pub(crate) fn encode_error_response(
         )
             .into_response()
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub(crate) struct UnaryGetQuery {
+    pub message: String,
+    pub encoding: String,
+    pub base64: Option<usize>,
+    pub compression: Option<String>,
+    pub connect: Option<String>,
+}
+
+pub(crate) fn decode_check_query(parts: &request::Parts) -> Result<ReqResInto, Response> {
+    let query_str = match parts.uri.query() {
+        Some(x) => x,
+        None => {
+            return Err(encode_error_response(
+                &RpcError::new(RpcErrorCode::InvalidArgument, "Missing query".into()),
+                false,
+                false,
+            ))
+        }
+    };
+
+    let query = match serde_qs::from_str::<UnaryGetQuery>(query_str) {
+        Ok(x) => x,
+        Err(err) => {
+            return Err(encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Wrong query, {}", err),
+                ),
+                false,
+                false,
+            ))
+        }
+    };
+
+    let binary = match query.encoding.as_str() {
+        "json" => false,
+        "proto" => true,
+        s => {
+            return Err(encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Wrong or unknown query.encoding: {}", s),
+                ),
+                true,
+                true,
+            ))
+        }
+    };
+
+    Ok(ReqResInto { binary })
 }
 
 pub(crate) fn decode_check_headers(
@@ -121,6 +174,91 @@ pub(crate) fn decode_check_headers(
     };
 
     Ok(ReqResInto { binary })
+}
+
+pub(crate) fn decode_request_payload_from_query<M, S>(
+    parts: &request::Parts,
+    _state: &S,
+    as_binary: bool,
+) -> Result<M, Response>
+where
+    M: Message + DeserializeOwned + Default,
+    S: Send + Sync + 'static,
+{
+    let for_streaming = false;
+
+    let query_str = match parts.uri.query() {
+        Some(x) => x,
+        None => {
+            return Err(encode_error_response(
+                &RpcError::new(RpcErrorCode::InvalidArgument, "Missing query".into()),
+                false,
+                false,
+            ))
+        }
+    };
+
+    let query = match serde_qs::from_str::<UnaryGetQuery>(query_str) {
+        Ok(x) => x,
+        Err(err) => {
+            return Err(encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Wrong query, {}", err),
+                ),
+                false,
+                false,
+            ))
+        }
+    };
+
+    let message = if query.base64 == Some(1) {
+        use base64::{engine::general_purpose, Engine as _};
+
+        match general_purpose::URL_SAFE.decode(&query.message) {
+            Ok(x) => String::from_utf8_lossy(x.as_slice()).to_string(),
+            Err(err) => {
+                return Err(encode_error_response(
+                    &RpcError::new(
+                        RpcErrorCode::InvalidArgument,
+                        format!("Wrong query.message, {}", err),
+                    ),
+                    false,
+                    false,
+                ))
+            }
+        }
+    } else {
+        query.message.into()
+    };
+
+    if as_binary {
+        let message: M = M::decode(message.as_bytes()).map_err(|e| {
+            encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Failed to decode binary protobuf. {}", e),
+                ),
+                as_binary,
+                for_streaming,
+            )
+        })?;
+
+        Ok(message)
+    } else {
+        let message: M = serde_json::from_str(&message).map_err(|e| {
+            encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Failed to decode json. {}", e),
+                ),
+                as_binary,
+                for_streaming,
+            )
+        })?;
+
+        Ok(message)
+    }
 }
 
 pub(crate) async fn decode_request_payload<M, S>(
