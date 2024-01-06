@@ -2,7 +2,7 @@ use std::{convert::Infallible, pin::Pin};
 
 use axum::{
     body::Body,
-    http::{header, Request, StatusCode},
+    http::{header, Method, Request, StatusCode},
     response::{IntoResponse, Response},
 };
 use futures::Future;
@@ -17,7 +17,8 @@ use crate::{
 };
 
 use super::codec::{
-    decode_check_headers, decode_request_payload, encode_error_response, ReqResInto,
+    decode_check_headers, decode_check_query, decode_request_payload,
+    decode_request_payload_from_query, encode_error_response, ReqResInto,
 };
 
 pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>: Clone + Send + Sized + 'static {
@@ -138,9 +139,16 @@ macro_rules! impl_handler {
                 Box::pin(async move {
                     let (mut parts, body) = req.into_parts();
 
-                    let ReqResInto { binary } = match decode_check_headers(&mut parts, false) {
-                        Ok(binary) => binary,
-                        Err(e) => return e,
+                    let ReqResInto { binary } = if parts.method == Method::GET {
+                        match decode_check_query(&parts) {
+                            Ok(binary) => binary,
+                            Err(e) => return e,
+                        }
+                    } else {
+                        match decode_check_headers(&mut parts, false) {
+                            Ok(binary) => binary,
+                            Err(e) => return e,
+                        }
                     };
 
                     let state = &state;
@@ -155,11 +163,20 @@ macro_rules! impl_handler {
                         };
                     )*
 
-                    let req = Request::from_parts(parts, body);
 
-                    let proto_req: TMReq = match decode_request_payload(req, state, binary, false).await {
-                        Ok(value) => value,
-                        Err(e) => return e,
+
+                    let proto_req: TMReq = if parts.method == Method::GET {
+                        match decode_request_payload_from_query(&parts, state, binary) {
+                            Ok(value) => value,
+                            Err(e) => return e,
+                        }
+                    } else {
+                        let req = Request::from_parts(parts, body);
+
+                        match decode_request_payload(req, state, binary, false).await {
+                            Ok(value) => value,
+                            Err(e) => return e,
+                        }
                     };
 
                     let res = self($($ty,)* proto_req).await.rpc_into_response();
