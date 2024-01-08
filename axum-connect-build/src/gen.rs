@@ -42,6 +42,7 @@ impl AxumConnectServiceGenerator {
 
     fn generate_service_method(&mut self, method: Method, path_root: &str) -> TokenStream {
         let method_name = format_ident!("{}", method.name);
+        let method_name_unary_get = format_ident!("{}_unary_get", method.name);
         let input_type: syn::Type = parse_str(&method.input_type).unwrap();
         let output_type: syn::Type = parse_str(&method.output_type).unwrap();
         let path = format!("/{}/{}", path_root, method.proto_name);
@@ -70,8 +71,6 @@ impl AxumConnectServiceGenerator {
                 }
             }
         } else {
-            let method_name_unary_get = format_ident!("{}_unary_get", method.name);
-
             quote! {
                 pub fn #method_name<T, H, S>(
                     handler: H
