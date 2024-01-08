@@ -1,9 +1,9 @@
-/*
-cargo run -p axum-connect-example
-
-curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%7D' -v
-curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%22name%22%3A%22foo%22%7D' -v
-*/
+//!
+//! $ cargo run -p axum-connect-example
+//!
+//! $ curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%7D' -v
+//! $ curl 'http://127.0.0.1:3030/hello.HelloWorldService/SayHello?encoding=json&message=%7B%22name%22%3A%22foo%22%7D' -v
+//!
 
 use async_stream::stream;
 use axum::{extract::Host, Router};
