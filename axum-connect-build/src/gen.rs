@@ -31,6 +31,7 @@ impl AxumConnectServiceGenerator {
             quote! {
                 pub struct #service_name;
 
+                #[allow(dead_code)]
                 impl #service_name {
                     #(#methods)*
                 }
