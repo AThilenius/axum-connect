@@ -216,7 +216,7 @@ where
         use base64::{engine::general_purpose, Engine as _};
 
         match general_purpose::URL_SAFE.decode(&query.message) {
-            Ok(x) => String::from_utf8_lossy(x.as_slice()).to_string(),
+            Ok(x) => x,
             Err(err) => {
                 return Err(encode_error_response(
                     &RpcError::new(
@@ -229,11 +229,11 @@ where
             }
         }
     } else {
-        query.message.into()
+        query.message.as_bytes().to_vec()
     };
 
     if as_binary {
-        let message: M = M::decode(message.as_bytes()).map_err(|e| {
+        let message: M = M::decode(&message[..]).map_err(|e| {
             encode_error_response(
                 &RpcError::new(
                     RpcErrorCode::InvalidArgument,
@@ -246,7 +246,7 @@ where
 
         Ok(message)
     } else {
-        let message: M = serde_json::from_str(&message).map_err(|e| {
+        let message: M = serde_json::from_slice(&message).map_err(|e| {
             encode_error_response(
                 &RpcError::new(
                     RpcErrorCode::InvalidArgument,
