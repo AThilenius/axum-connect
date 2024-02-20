@@ -161,7 +161,7 @@ macro_rules! impl_handler {
                 Box::pin(async move {
                     let (mut parts, body) = req.into_parts();
 
-                    let ReqResInto { binary } = match decode_check_headers(&mut parts, true) {
+                    let ReqResInto { binary_res, streaming_req } = match decode_check_headers(&mut parts, true) {
                         Ok(binary) => binary,
                         Err(e) => return e,
                     };
