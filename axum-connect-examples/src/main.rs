@@ -5,8 +5,9 @@
 //!
 
 use async_stream::stream;
-use axum::{extract::Host, Router};
+use axum::Router;
 use axum_connect::{futures::Stream, prelude::*};
+use axum_extra::extract::Host;
 use error::Error;
 use proto::hello::*;
 use tower_http::cors::CorsLayer;

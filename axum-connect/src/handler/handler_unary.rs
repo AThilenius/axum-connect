@@ -21,7 +21,9 @@ use super::codec::{
     decode_request_payload_from_query, encode_error_response, ReqResInto,
 };
 
-pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>: Clone + Send + Sized + 'static {
+pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>:
+    Clone + Send + Sync + Sized + 'static
+{
     type Future: Future<Output = Response> + Send + 'static;
 
     fn call(self, req: Request<Body>, state: TState) -> Self::Future;
@@ -129,7 +131,7 @@ macro_rules! impl_handler {
             TMRes: Message + Serialize + Send + 'static,
             TInto: RpcIntoResponse<TMRes>,
             TFnFut: Future<Output = TInto> + Send,
-            TFn: FnOnce($($ty,)* TMReq) -> TFnFut + Clone + Send + 'static,
+            TFn: FnOnce($($ty,)* TMReq) -> TFnFut + Clone + Send + Sync + 'static,
             TState: Send + Sync + 'static,
             $( $ty: RpcFromRequestParts<TMRes, TState> + Send, )*
         {
