@@ -21,7 +21,9 @@ use super::codec::{
     decode_check_headers, decode_request_payload, encode_error, encode_error_response, ReqResInto,
 };
 
-pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>: Clone + Send + Sized + 'static {
+pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
+    Clone + Send + Sync + Sized + 'static
+{
     type Future: Future<Output = Response> + Send + 'static;
 
     fn call(self, req: Request<Body>, state: TState) -> Self::Future;

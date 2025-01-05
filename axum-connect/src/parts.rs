@@ -1,11 +1,13 @@
 use async_trait::async_trait;
 use axum::{
     extract::{
-        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Host, Query, State,
+        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State,
     },
     http::{self},
     Extension,
 };
+#[cfg(feature = "axum-extra")]
+use axum_extra::extract::Host;
 use prost::Message;
 use serde::de::DeserializeOwned;
 
@@ -28,6 +30,7 @@ where
     ) -> Result<Self, Self::Rejection>;
 }
 
+#[cfg(feature = "axum-extra")]
 #[async_trait]
 impl<M, S> RpcFromRequestParts<M, S> for Host
 where
