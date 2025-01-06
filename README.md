@@ -6,6 +6,7 @@ framework](https://connect.build/docs/introduction) to Rust via idiomatic
 
 # Axum Version
 
+- `axum-connect:0.4` works with `axum:0.8`
 - `axum-connect:0.3` works with `axum:0.7`
 - `axum-connect:0.2` works with `axum:0.6`
 
