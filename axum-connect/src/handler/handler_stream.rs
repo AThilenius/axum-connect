@@ -85,7 +85,7 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
 //                     match rpc_item {
 //                         Ok(rpc_item) => {
 //                             if binary {
-//                                 let mut res = vec![0x2, 0, 0, 0, 0];
+//                                 let mut res = vec![0, 0, 0, 0, 0];
 //                                 if let Err(e) = rpc_item.encode(&mut res) {
 //                                     let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
 //                                     yield Result::<Vec<u8>, Infallible>::Ok(encode_error(&e, true));
@@ -95,7 +95,7 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
 //                                 res[1..5].copy_from_slice(&size);
 //                                 yield Ok(res);
 //                             } else {
-//                                 let mut res = vec![0x2, 0, 0, 0, 0];
+//                                 let mut res = vec![0, 0, 0, 0, 0];
 //                                 if let Err(e) = serde_json::to_writer(&mut res, &rpc_item) {
 //                                     let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
 //                                     yield Ok(encode_error(&e, true));
@@ -195,7 +195,7 @@ macro_rules! impl_handler {
                             match rpc_item {
                                 Ok(rpc_item) => {
                                     if binary {
-                                        let mut res = vec![0x2, 0, 0, 0, 0];
+                                        let mut res = vec![0, 0, 0, 0, 0];
                                         if let Err(e) = rpc_item.encode(&mut res) {
                                             let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
                                             yield Result::<Vec<u8>, Infallible>::Ok(encode_error(&e, true));
@@ -205,7 +205,7 @@ macro_rules! impl_handler {
                                         res[1..5].copy_from_slice(&size);
                                         yield Ok(res);
                                     } else {
-                                        let mut res = vec![0x2, 0, 0, 0, 0];
+                                        let mut res = vec![0, 0, 0, 0, 0];
                                         if let Err(e) = serde_json::to_writer(&mut res, &rpc_item) {
                                             let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
                                             yield Ok(encode_error(&e, true));
