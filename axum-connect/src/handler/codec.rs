@@ -1,6 +1,5 @@
 use axum::{
     body::{self, Body},
-    extract::FromRequest,
     http::{header, request, Request, StatusCode},
     response::{IntoResponse, Response},
 };
@@ -263,7 +262,7 @@ where
 
 pub(crate) async fn decode_request_payload<M, S>(
     req: Request<Body>,
-    state: &S,
+    _state: &S,
     as_binary: bool,
     for_streaming: bool,
 ) -> Result<M, Response>
@@ -271,21 +270,27 @@ where
     M: Message + DeserializeOwned + Default,
     S: Send + Sync + 'static,
 {
-    // Axum-connect only supports unary request types, so we can ignore for_streaming.
-    if as_binary {
-        let bytes = body::to_bytes(req.into_body(), usize::MAX)
-            .await
-            .map_err(|e| {
-                encode_error_response(
-                    &RpcError::new(
-                        RpcErrorCode::InvalidArgument,
-                        format!("Failed to read request body. {}", e),
-                    ),
-                    as_binary,
-                    for_streaming,
-                )
-            })?;
+    let bytes = body::to_bytes(req.into_body(), usize::MAX)
+        .await
+        .map_err(|e| {
+            encode_error_response(
+                &RpcError::new(
+                    RpcErrorCode::InvalidArgument,
+                    format!("Failed to read request body. {}", e),
+                ),
+                as_binary,
+                for_streaming,
+            )
+        })?;
 
+    // All streaming messages are wrapped in an envelope,
+    // even if they are just requests for server-streaming.
+    // https://connectrpc.com/docs/protocol/#streaming-request
+    // https://github.com/connectrpc/connectrpc.com/issues/141
+    // TODO: Parse the envelope (containing flags u8 and length u64)
+    let bytes = bytes.slice(if for_streaming { 5.. } else { 0.. });
+
+    if as_binary {
         let message: M = M::decode(bytes).map_err(|e| {
             encode_error_response(
                 &RpcError::new(
@@ -299,21 +304,7 @@ where
 
         Ok(message)
     } else {
-        let str = match String::from_request(req, state).await {
-            Ok(value) => value,
-            Err(e) => {
-                return Err(encode_error_response(
-                    &RpcError::new(
-                        RpcErrorCode::InvalidArgument,
-                        format!("Failed to read request body. {}", e),
-                    ),
-                    as_binary,
-                    for_streaming,
-                ));
-            }
-        };
-
-        let message: M = serde_json::from_str(&str).map_err(|e| {
+        let message: M = serde_json::from_slice(&bytes).map_err(|e| {
             encode_error_response(
                 &RpcError::new(
                     RpcErrorCode::InvalidArgument,
