@@ -115,11 +115,7 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
 
 //                 // EndStreamResponse, see: https://connect.build/docs/protocol/#error-end-stream
 //                 // TODO: Support returning trailers (they would need to bundle in the error type).
-//                 if binary {
-//                     yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 0]);
-//                 } else {
-//                     yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
-//                 }
+//                 yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
 //             };
 
 //             (
@@ -225,11 +221,7 @@ macro_rules! impl_handler {
 
                         // EndStreamResponse, see: https://connect.build/docs/protocol/#error-end-stream
                         // TODO: Support returning trailers (they would need to bundle in the error type).
-                        if binary {
-                            yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 0]);
-                        } else {
-                            yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
-                        }
+                        yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
                     };
 
                     (
