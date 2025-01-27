@@ -1,25 +1,14 @@
-use std::{convert::Infallible, pin::Pin};
+use std::pin::Pin;
 
 use async_stream::stream;
-use axum::{
-    body::Body,
-    http::{header, Request, StatusCode},
-    response::{IntoResponse, Response},
-};
+use axum::{body::Body, http::Request, response::Response};
 use futures::{Future, Stream, StreamExt};
 use prost::Message;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    error::RpcIntoError,
-    parts::RpcFromRequestParts,
-    prelude::{RpcError, RpcErrorCode},
-    response::RpcIntoResponse,
-};
+use crate::{error::RpcIntoError, parts::RpcFromRequestParts, response::RpcIntoResponse};
 
-use super::codec::{
-    decode_check_headers, decode_request_payload, encode_error, encode_error_response, ReqResInto,
-};
+use super::codec::{decode_check_headers, decode_request_payload, ReqResInto, ResponseEncoder};
 
 pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
     Clone + Send + Sync + Sized + 'static
@@ -65,8 +54,9 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
 //             let t1 = match T1::rpc_from_request_parts(&mut parts, state).await {
 //                 Ok(value) => value,
 //                 Err(e) => {
-//                     let e = e.rpc_into_error();
-//                     return encode_error_response(&e, binary, true);
+//                     return ResponseEncoder::empty(true, binary)
+//                         .err(e.rpc_into_error())
+//                         .encode_response();
 //                 }
 //             };
 
@@ -81,56 +71,15 @@ pub trait RpcHandlerStream<TMReq, TMRes, TUid, TState>:
 
 //             let res = stream! {
 //                 while let Some(item) = res.next().await {
-//                     let rpc_item = item.rpc_into_response();
-//                     match rpc_item {
-//                         Ok(rpc_item) => {
-//                             if binary {
-//                                 let mut res = vec![0, 0, 0, 0, 0];
-//                                 if let Err(e) = rpc_item.encode(&mut res) {
-//                                     let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
-//                                     yield Result::<Vec<u8>, Infallible>::Ok(encode_error(&e, true));
-//                                     break;
-//                                 }
-//                                 let size = ((res.len() - 5) as u32).to_be_bytes();
-//                                 res[1..5].copy_from_slice(&size);
-//                                 yield Ok(res);
-//                             } else {
-//                                 let mut res = vec![0, 0, 0, 0, 0];
-//                                 if let Err(e) = serde_json::to_writer(&mut res, &rpc_item) {
-//                                     let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
-//                                     yield Ok(encode_error(&e, true));
-//                                     break;
-//                                 }
-//                                 let size = ((res.len() - 5) as u32).to_be_bytes();
-//                                 res[1..5].copy_from_slice(&size);
-//                                 yield Ok(res);
-//                             }
-//                         },
-//                         Err(e) => {
-//                             yield Ok(encode_error(&e, binary));
-//                             break;
-//                         }
-//                     }
+//                     yield Ok(item.rpc_into_response()?);
 //                 }
-
-//                 // EndStreamResponse, see: https://connect.build/docs/protocol/#error-end-stream
-//                 // TODO: Support returning trailers (they would need to bundle in the error type).
-//                 yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
 //             };
-
-//             (
-//                 StatusCode::OK,
-//                 [(
-//                     header::CONTENT_TYPE,
-//                     if binary {
-//                         "application/connect+proto"
-//                     } else {
-//                         "application/connect+json"
-//                     },
-//                 )],
-//                 Body::from_stream(res),
-//             )
-//                 .into_response()
+//
+//             // EndStreamResponse, see: https://connect.build/docs/protocol/#error-end-stream
+//             // TODO: Support returning trailers (they would need to bundle in the error type).
+//             ResponseEncoder::<TMRes>::new(true, binary)
+//                 .stream(res)
+//                 .encode_response()
 //         })
 //     }
 // }
@@ -170,8 +119,9 @@ macro_rules! impl_handler {
                     let $ty = match $ty::rpc_from_request_parts(&mut parts, state).await {
                         Ok(value) => value,
                         Err(e) => {
-                            let e = e.rpc_into_error();
-                            return encode_error_response(&e, binary, true);
+                            return ResponseEncoder::empty(true, binary)
+                                .err(e.rpc_into_error())
+                                .encode_response();
                         }
                     };
                     )*
@@ -187,56 +137,14 @@ macro_rules! impl_handler {
 
                     let res = stream! {
                         while let Some(item) = res.next().await {
-                            let rpc_item = item.rpc_into_response();
-                            match rpc_item {
-                                Ok(rpc_item) => {
-                                    if binary {
-                                        let mut res = vec![0, 0, 0, 0, 0];
-                                        if let Err(e) = rpc_item.encode(&mut res) {
-                                            let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
-                                            yield Result::<Vec<u8>, Infallible>::Ok(encode_error(&e, true));
-                                            break;
-                                        }
-                                        let size = ((res.len() - 5) as u32).to_be_bytes();
-                                        res[1..5].copy_from_slice(&size);
-                                        yield Ok(res);
-                                    } else {
-                                        let mut res = vec![0, 0, 0, 0, 0];
-                                        if let Err(e) = serde_json::to_writer(&mut res, &rpc_item) {
-                                            let e = RpcError::new(RpcErrorCode::Internal, e.to_string());
-                                            yield Ok(encode_error(&e, true));
-                                            break;
-                                        }
-                                        let size = ((res.len() - 5) as u32).to_be_bytes();
-                                        res[1..5].copy_from_slice(&size);
-                                        yield Ok(res);
-                                    }
-                                },
-                                Err(e) => {
-                                    yield Ok(encode_error(&e, binary));
-                                    break;
-                                }
-                            }
+                            yield Ok(item.rpc_into_response()?);
                         }
-
-                        // EndStreamResponse, see: https://connect.build/docs/protocol/#error-end-stream
-                        // TODO: Support returning trailers (they would need to bundle in the error type).
-                        yield Result::<Vec<u8>, Infallible>::Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']);
                     };
 
-                    (
-                        StatusCode::OK,
-                        [(
-                            header::CONTENT_TYPE,
-                            if binary {
-                                "application/connect+proto"
-                            } else {
-                                "application/connect+json"
-                            },
-                        )],
-                        Body::from_stream(res),
-                    )
-                        .into_response()
+                    // TODO: Support returning trailers (they would need to bundle in the error type).
+                    ResponseEncoder::<TMRes>::new(true, binary)
+                        .stream(res)
+                        .encode_response()
                 })
             }
         }
