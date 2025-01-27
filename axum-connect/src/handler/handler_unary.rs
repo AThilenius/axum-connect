@@ -1,24 +1,19 @@
-use std::{convert::Infallible, pin::Pin};
+use std::pin::Pin;
 
 use axum::{
     body::Body,
-    http::{header, Method, Request, StatusCode},
-    response::{IntoResponse, Response},
+    http::{Method, Request},
+    response::Response,
 };
 use futures::Future;
 use prost::Message;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    error::RpcIntoError,
-    parts::RpcFromRequestParts,
-    prelude::{RpcError, RpcErrorCode},
-    response::RpcIntoResponse,
-};
+use crate::{error::RpcIntoError, parts::RpcFromRequestParts, response::RpcIntoResponse};
 
 use super::codec::{
     decode_check_headers, decode_check_query, decode_request_payload,
-    decode_request_payload_from_query, encode_error_response, ReqResInto,
+    decode_request_payload_from_query, ReqResInto, ResponseEncoder,
 };
 
 pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>:
@@ -67,54 +62,39 @@ pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>:
 //             let t1 = match T1::rpc_from_request_parts(&mut parts, state).await {
 //                 Ok(value) => value,
 //                 Err(e) => {
-//                     let e = e.rpc_into_error();
-//                     return encode_error_response(&e, binary, false);
+//                     return ResponseEncoder::empty(false, binary)
+//                         .err(e.rpc_into_error())
+//                         .encode_response();
 //                 }
 //             };
 
-//             let req = Request::from_parts(parts, body);
-
-//             let proto_req: TMReq = match decode_request_payload(req, state, binary, false).await {
-//                 Ok(value) => value,
-//                 Err(e) => return e,
+//             let proto_req: TMReq = if parts.method == Method::GET {
+//                 match decode_request_payload_from_query(&parts, state, binary) {
+//                     Ok(value) => value,
+//                     Err(e) => return e,
+//                 }
+//             } else {
+//                 let req = Request::from_parts(parts, body);
+//
+//                 match decode_request_payload(req, state, binary, false).await {
+//                     Ok(value) => value,
+//                     Err(e) => return e,
+//                 }
 //             };
 
 //             let res = self(t1, proto_req).await.rpc_into_response();
-//             let res = match res {
+//             match res {
 //                 Ok(res) => {
-//                     if binary {
-//                         res.encode_to_vec()
-//                     } else {
-//                         match serde_json::to_vec(&res) {
-//                             Ok(res) => res,
-//                             Err(e) => {
-//                                 let e = RpcError::new(
-//                                     RpcErrorCode::Internal,
-//                                     format!("Failed to serialize response: {}", e),
-//                                 );
-//                                 return encode_error_response(&e, binary, false);
-//                             }
-//                         }
-//                     }
+//                     ResponseEncoder::<TMRes>::new(false, binary)
+//                         .message(res)
+//                         .encode_response()
 //                 }
-//                 Err(e) => {
-//                     return encode_error_response(&e, binary, false);
+//                 Err(error) => {
+//                     ResponseEncoder::empty(false, binary)
+//                         .err(error)
+//                         .encode_response()
 //                 }
-//             };
-
-//             (
-//                 StatusCode::OK,
-//                 [(
-//                     header::CONTENT_TYPE,
-//                     if binary {
-//                         "application/proto"
-//                     } else {
-//                         "application/json"
-//                     },
-//                 )],
-//                 Result::<Vec<u8>, Infallible>::Ok(res),
-//             )
-//                 .into_response()
+//             }
 //         })
 //     }
 // }
@@ -159,13 +139,12 @@ macro_rules! impl_handler {
                         let $ty = match $ty::rpc_from_request_parts(&mut parts, state).await {
                             Ok(value) => value,
                             Err(e) => {
-                                let e = e.rpc_into_error();
-                                return encode_error_response(&e, binary, false);
+                                return ResponseEncoder::empty(false, binary)
+                                    .err(e.rpc_into_error())
+                                    .encode_response();
                             }
                         };
                     )*
-
-
 
                     let proto_req: TMReq = if parts.method == Method::GET {
                         match decode_request_payload_from_query(&parts, state, binary) {
@@ -182,41 +161,18 @@ macro_rules! impl_handler {
                     };
 
                     let res = self($($ty,)* proto_req).await.rpc_into_response();
-                    let res = match res {
+                    match res {
                         Ok(res) => {
-                            if binary {
-                                res.encode_to_vec()
-                            } else {
-                                match serde_json::to_vec(&res) {
-                                    Ok(res) => res,
-                                    Err(e) => {
-                                        let e = RpcError::new(
-                                            RpcErrorCode::Internal,
-                                            format!("Failed to serialize response: {}", e),
-                                        );
-                                        return encode_error_response(&e, binary, false);
-                                    }
-                                }
-                            }
+                            ResponseEncoder::<TMRes>::new(false, binary)
+                                .message(res)
+                                .encode_response()
                         }
-                        Err(e) => {
-                            return encode_error_response(&e, binary, false);
+                        Err(error) => {
+                            ResponseEncoder::empty(false, binary)
+                                .err(error)
+                                .encode_response()
                         }
-                    };
-
-                    (
-                        StatusCode::OK,
-                        [(
-                            header::CONTENT_TYPE,
-                            if binary {
-                                "application/proto"
-                            } else {
-                                "application/json"
-                            },
-                        )],
-                        Result::<Vec<u8>, Infallible>::Ok(res),
-                    )
-                        .into_response()
+                    }
                 })
             }
         }
