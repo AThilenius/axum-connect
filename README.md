@@ -4,12 +4,6 @@ Brings the protobuf-based [Connect-Web RPC
 framework](https://connect.build/docs/introduction) to Rust via idiomatic
 [Axum](https://github.com/tokio-rs/axum).
 
-# Axum Version
-
-- `axum-connect:0.4` works with `axum:0.8`
-- `axum-connect:0.3` works with `axum:0.7`
-- `axum-connect:0.2` works with `axum:0.6`
-
 # Features 🔍
 
 - Integrates into existing Axum HTTP applications seamlessly
@@ -29,16 +23,6 @@ framework](https://connect.build/docs/introduction) to Rust via idiomatic
 - All the other amazing benefits that come with Axum, like the community,
   documentation and performance!
 
-# Caution ⚠️
-
-We use `axum-connect` in production, but I don't kow that anyone with more sense
-does. It's written in Rust which obviously offers some amazing compiler
-guarantees, but it's not well tested or battle-proven yet. Do what you will with
-that information.
-
-Please let me know if you're using `axum-connect`! And open issues if you find a
-bug.
-
 # Getting Started 🤓
 
 _Prior knowledge with [Protobuf](https://github.com/protocolbuffers/protobuf)
@@ -54,8 +38,10 @@ You'll obviously also need `axum` and `tokio`.
 ```sh
 # Note: axum-connect-build will fetch `protoc` for you.
 cargo add --build axum-connect-build
-cargo add axum-connect prost axum
-cargo add tokio --features full
+
+# Both Prost and Axum are version sensitive. I haven't found a good workaround
+# for this yet. PRs welcome!
+cargo add axum-connect tokio prost@0.13 axum@0.8 --features=tokio/full
 ```
 
 ## Protobuf File 🥱
@@ -205,8 +191,17 @@ async fn stream_three_reponses(
 cargo run -p axum-connect-example
 ```
 
-It's Connect RPCs, so you can use the Buf Studio to test things out!
-https://buf.build/studio/athilenius/axum-connect/main/hello.HelloWorldService/SayHello?target=http%3A%2F%2Flocalhost%3A3030
+It's Connect RPCs, so you can use the Buf Studio to test things out! [Buf Studio - Hello RPC](https://buf.build/studio/athilenius/axum-connect/main/hello.HelloWorldService/SayHello?target=http%3A%2F%2Flocalhost%3A3030&share=sxKoVspLzE1VslJQcsxJTVaqBQA)
+
+Or CURL it
+
+```sh
+curl -X POST http://localhost:3030/hello.HelloWorldService/SayHello \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Alec"}'
+```
+
+> {"message":"Hello Alec! You're addressing the hostname: localhost:3030."}
 
 # Request/Response Parts 🙍‍♂️
 
