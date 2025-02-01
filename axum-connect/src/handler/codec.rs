@@ -1,245 +1,114 @@
 use std::convert::Infallible;
 use std::pin::Pin;
 
-use axum::{
-    body::{self, Body},
-    http::{header, request, Request, StatusCode},
-    response::{IntoResponse, Response},
-};
+use axum::body::{self, Body};
+use axum::http::{header, request, Request, StatusCode};
+use axum::response::{IntoResponse, Response};
 use futures::{Stream, StreamExt};
 use prost::Message;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
-use crate::prelude::{RpcError, RpcErrorCode, RpcResult};
+use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
+use crate::response::{RpcIntoResponse, RpcResult};
 
 pub(crate) struct ReqResInto {
     pub binary: bool,
 }
 
+type ResponseStream<M> = Pin<Box<dyn Stream<Item = RpcResult<M>> + Send>>;
+
+enum ResponseContent<M> {
+    UnarySuccess(M),
+    UnaryError(RpcError),
+    StreamingSuccess(ResponseStream<M>),
+    StreamingError(RpcError),
+}
+
 pub(crate) struct ResponseEncoder<M> {
-    streaming: bool,
     binary: bool,
-    error: Option<RpcError>,
-    message: Option<M>,
-    stream: Option<Pin<Box<dyn Stream<Item = RpcResult<M>> + Send>>>,
+    content: ResponseContent<M>,
 }
 
 impl ResponseEncoder<()> {
-    pub fn empty(streaming: bool, binary: bool) -> Self {
-        Self::new(streaming, binary)
+    pub fn error(error: impl RpcIntoError, streaming: bool, binary: bool) -> Self {
+        Self {
+            binary,
+            content: if streaming {
+                ResponseContent::StreamingError(error.rpc_into_error())
+            } else {
+                ResponseContent::UnaryError(error.rpc_into_error())
+            },
+        }
     }
 }
 
 impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
-    pub fn new(streaming: bool, binary: bool) -> Self {
+    pub fn unary(response: impl RpcIntoResponse<M>, binary: bool) -> Self {
         Self {
-            streaming,
             binary,
-            error: None,
-            message: None,
-            stream: None,
+            content: match response.rpc_into_response() {
+                Ok(message) => ResponseContent::UnarySuccess(message),
+                Err(error) => ResponseContent::UnaryError(error),
+            },
         }
     }
 
-    pub fn err(self, error: RpcError) -> Self {
-        self.err_opt(Some(error))
-    }
-
-    pub fn err_opt(mut self, error: Option<RpcError>) -> Self {
-        self.error = error;
-        self
-    }
-
-    pub fn stream(mut self, stream: impl Stream<Item = RpcResult<M>> + Send + 'static) -> Self {
-        self.stream = Some(stream.boxed());
-        self
-    }
-
-    pub fn message(mut self, message: M) -> Self {
-        self.message = Some(message);
-        self
+    pub fn stream(stream: ResponseStream<M>, binary: bool) -> Self {
+        Self {
+            binary,
+            content: ResponseContent::StreamingSuccess(stream),
+        }
     }
 
     pub fn status_code(&self) -> StatusCode {
-        // Streaming requests ALWAYS return 200 response code
-        // https://connectrpc.com/docs/protocol/#streaming-response
-        if self.streaming {
-            return StatusCode::OK;
-        }
+        use ResponseContent::*;
 
-        self.error
-            .as_ref()
-            .map(|e| e.code.clone())
-            .map(StatusCode::from)
-            .unwrap_or(StatusCode::OK)
+        match &self.content {
+            UnarySuccess(_) => StatusCode::OK,
+            UnaryError(e) => e.code.clone().into(),
+
+            // Streaming requests ALWAYS return 200 response code
+            // https://connectrpc.com/docs/protocol/#streaming-response
+            StreamingSuccess(_) | StreamingError(_) => StatusCode::OK,
+        }
     }
 
     pub fn content_type(&self) -> &'static str {
-        match (self.streaming, self.binary, self.error.as_ref()) {
+        use ResponseContent::*;
+
+        match (&self.content, self.binary) {
             // Streaming
-            (true, false, _) => "application/connect+json",
-            (true, true, _) => "application/connect+proto",
+            (StreamingSuccess(_) | StreamingError(_), false) => "application/connect+json",
+            (StreamingSuccess(_) | StreamingError(_), true) => "application/connect+proto",
 
             // Errors in unary calls are ALWAYS encoded as JSONs
             // https://connectrpc.com/docs/protocol/#unary-response
-            (false, _, Some(_)) => "application/json",
+            (UnaryError(_), _) => "application/json",
 
             // Unary successful
-            (false, false, None) => "application/json",
-            (false, true, None) => "application/proto",
-        }
-    }
-
-    fn encode_message_enveloped(&mut self, message: &M) -> (Vec<u8>, Option<&RpcError>) {
-        let mut result = vec![0, 0, 0, 0, 0];
-
-        if self.binary {
-            if let Err(error) = message.encode(&mut result) {
-                self.error = Some(RpcError::new(RpcErrorCode::Internal, error.to_string()));
-                return (self.encode_message_end(), self.error.as_ref());
-            }
-        } else if let Err(error) = serde_json::to_writer(&mut result, &message) {
-            self.error = Some(RpcError::new(RpcErrorCode::Internal, error.to_string()));
-            return (self.encode_message_end(), self.error.as_ref());
-        }
-
-        let size = ((result.len() - 5) as u32).to_be_bytes();
-        result[1..5].copy_from_slice(&size);
-        (result, None)
-    }
-
-    fn encode_message_unary(&mut self, message: &M) -> (Vec<u8>, Option<&RpcError>) {
-        if self.binary {
-            (message.encode_to_vec(), None)
-        } else {
-            match serde_json::to_vec(&message) {
-                Ok(message) => (message, None),
-                Err(error) => {
-                    self.error = Some(RpcError::new(
-                        RpcErrorCode::Internal,
-                        format!("Failed to serialize response: {error}"),
-                    ));
-
-                    (self.encode_message_end(), self.error.as_ref())
-                }
-            }
-        }
-    }
-
-    fn encode_message_end(&mut self) -> Vec<u8> {
-        if let Some(error) = self.error.as_ref() {
-            // Errors in unary calls are ALWAYS encoded as JSONs
-            //
-            // Streaming errors are wrapped in an { "error": ... }
-            // while unary errors are just plain JSON encoded.
-            //
-            // https://connectrpc.com/docs/protocol/#unary-response
-            // https://connectrpc.com/docs/protocol/#error-end-stream
-            if self.streaming {
-                #[derive(Serialize)]
-                struct EndOfStream<'a> {
-                    error: &'a RpcError,
-                }
-
-                let message = EndOfStream { error };
-
-                let mut result = vec![0x2, 0, 0, 0, 0];
-                serde_json::to_writer(&mut result, &message).unwrap();
-
-                let size = ((result.len() - 5) as u32).to_be_bytes();
-                result[1..5].copy_from_slice(&size);
-
-                result
-            } else {
-                serde_json::to_vec(&error).unwrap()
-            }
-        } else if self.streaming {
-            // Final streaming message ALWAYS has to contain at least
-            // an empty object and is ALWAYS encoded as JSON.
-            // https://connectrpc.com/docs/protocol/#error-end-stream
-            vec![0x2, 0, 0, 0, 2, b'{', b'}']
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn encode_body_streaming(mut self) -> Body {
-        if self.error.is_some() {
-            // Error was set outside of the stream.
-            // This is most likely fatal and we probably
-            // should not stream stuff but just return the error.
-            Body::from(self.encode_message_end())
-        } else if let Some(stream) = self.stream.take() {
-            // Streaming call with a stream set
-            //
-            // This was born in hell and in hell it shall stay.
-            // For mortals, it simply ensures that all messages
-            // inside the stream are passed along envelope-encodeed
-            // and upon reaching the end, the end message is added.
-            //
-            // At this this stage the only errors can come from within
-            // the stream and this thing handles that case by simply
-            // encoding the error end terminating the stream.
-            Body::from_stream(futures::stream::unfold(
-                (stream, Some(self)),
-                move |(mut stream, this)| async move {
-                    match (stream.next().await, this) {
-                        (_, None) => {
-                            // The `this` was not set, which means we are past
-                            // the last message, returning None ends the stream
-                            // without any more messages.
-                            //
-                            // The type annotation is simply to tell the complier
-                            // there are no `Err`s in the result stream since
-                            // `Body::from_stream` requires a impl TryStream.
-                            Option::<(Result<Vec<u8>, Infallible>, _)>::None
-                        }
-                        (Some(Ok(message)), Some(mut this)) => {
-                            // This is a normal message, we need to envelope-encode it.
-                            // If an error occurs, it will be emitted instead of
-                            // the original message, so we just have to make sure
-                            // to terminate the stream.
-                            match this.encode_message_enveloped(&message) {
-                                (message, None) => Some((Ok(message), (stream, Some(this)))),
-                                (message, Some(_)) => Some((Ok(message), (stream, None))),
-                            }
-                        }
-                        (Some(Err(error)), Some(this)) => {
-                            // An error in the stream. Send it as the last
-                            // message and terminate the stream.
-                            let message = this.err(error).encode_message_end();
-                            Some((Ok(message), (stream, None)))
-                        }
-                        (None, Some(mut this)) => {
-                            // Stream was read all the way through without errors,
-                            // send the last message.
-                            let message = this.encode_message_end();
-                            Some((Ok(message), (stream, None)))
-                        }
-                    }
-                },
-            ))
-        } else {
-            // A streaming message without a stream present.
-            // This is technically a valid state, just send
-            // the ending message.
-            Body::from(self.encode_message_end())
-        }
-    }
-
-    fn encode_body_unary(mut self) -> Body {
-        if let Some(message) = self.message.take() {
-            Body::from(self.encode_message_unary(&message).0)
-        } else {
-            Body::from(self.encode_message_end())
+            (UnarySuccess(_), false) => "application/json",
+            (UnarySuccess(_), true) => "application/proto",
         }
     }
 
     fn encode_body(self) -> Body {
-        if self.streaming {
-            self.encode_body_streaming()
-        } else {
-            self.encode_body_unary()
+        use ResponseContent::*;
+
+        match self.content {
+            // Error
+            UnaryError(error) => Body::from(encode_unary_error(error)),
+            StreamingError(error) => Body::from(encode_streaming_error(error)),
+
+            // Unary
+            UnarySuccess(message) => Body::from(if self.binary {
+                encode_unary_message_binary(message)
+            } else {
+                encode_unary_message_json(message).unwrap_or_else(encode_unary_error)
+            }),
+
+            // Streaming
+            StreamingSuccess(stream) => Body::from_stream(encode_stream(stream, self.binary)),
         }
     }
 
@@ -249,6 +118,111 @@ impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
         let body = self.encode_body();
         (code, headers, body).into_response()
     }
+}
+
+fn encode_unary_error(error: RpcError) -> Vec<u8> {
+    // Errors in unary calls are ALWAYS encoded as JSONs
+    //
+    // https://connectrpc.com/docs/protocol/#unary-response
+    serde_json::to_vec(&error).unwrap()
+}
+
+fn encode_streaming_error(error: RpcError) -> Vec<u8> {
+    // Streaming errors are wrapped in an { "error": ... }
+    // while unary errors are just plain JSON encoded.
+    //
+    // https://connectrpc.com/docs/protocol/#error-end-stream
+    #[derive(Serialize)]
+    struct EndOfStream {
+        error: RpcError,
+    }
+
+    let message = EndOfStream { error };
+
+    let mut result = vec![0x2, 0, 0, 0, 0];
+    serde_json::to_writer(&mut result, &message).unwrap();
+
+    let size = ((result.len() - 5) as u32).to_be_bytes();
+    result[1..5].copy_from_slice(&size);
+    result
+}
+
+fn encode_unary_message_binary<M: Message>(message: M) -> Vec<u8> {
+    message.encode_to_vec()
+}
+
+fn encode_unary_message_json<M: Serialize>(message: M) -> RpcResult<Vec<u8>> {
+    match serde_json::to_vec(&message) {
+        Ok(message) => Ok(message),
+        Err(error) => Err(RpcError::new(
+            RpcErrorCode::Internal,
+            format!("Failed to serialize response: {error}"),
+        )),
+    }
+}
+
+fn encode_envelope<M: Serialize + Message>(message: M, binary: bool) -> RpcResult<Vec<u8>> {
+    let mut result = vec![0, 0, 0, 0, 0];
+
+    if binary {
+        if let Err(error) = message.encode(&mut result) {
+            return Err(RpcError::new(RpcErrorCode::Internal, error.to_string()));
+        }
+    } else if let Err(error) = serde_json::to_writer(&mut result, &message) {
+        return Err(RpcError::new(RpcErrorCode::Internal, error.to_string()));
+    }
+
+    let size = ((result.len() - 5) as u32).to_be_bytes();
+    result[1..5].copy_from_slice(&size);
+    Ok(result)
+}
+
+fn encode_stream<M: Serialize + Message + 'static>(
+    stream: ResponseStream<M>,
+    binary: bool,
+) -> impl Stream<Item = Result<Vec<u8>, Infallible>> {
+    // This was born in hell and in hell it shall stay.
+    // For mortals, it simply ensures that all messages
+    // inside the stream are passed along envelope-encodeed
+    // and upon reaching the end, the end message is added.
+    //
+    // At this this stage the only errors can come from within
+    // the stream and this thing handles that case by simply
+    // encoding the error end terminating the stream.
+    futures::stream::unfold(Some(stream), move |stream| async move {
+        match stream {
+            None => {
+                // We are past the last message, returning None
+                // ends the stream without any more messages.
+                None
+            }
+            Some(mut stream) => match stream.next().await {
+                Some(Ok(message)) => {
+                    // This is a normal message, we need to envelope-encode it.
+                    // If an error occurs, we encode it instead and terminate
+                    // the stream.
+                    match encode_envelope(message, binary) {
+                        Ok(message) => Some((Ok(message), Some(stream))),
+                        Err(error) => Some((Ok(encode_streaming_error(error)), None)),
+                    }
+                }
+                Some(Err(error)) => {
+                    // An error in the stream. Send it as the last
+                    // message and terminate the stream.
+                    Some((Ok(encode_streaming_error(error)), None))
+                }
+                None => {
+                    // Stream was read all the way through without errors,
+                    // send the last message.
+                    //
+                    // Final streaming message ALWAYS has to contain at least
+                    // an empty object and is ALWAYS encoded as JSON.
+                    // https://connectrpc.com/docs/protocol/#error-end-stream
+                    Some((Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']), None))
+                }
+            },
+        }
+    })
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -265,9 +239,7 @@ pub(crate) fn decode_check_query(parts: &request::Parts) -> Result<ReqResInto, R
         Some(x) => x,
         None => {
             let error = RpcError::new(RpcErrorCode::InvalidArgument, "Missing query".into());
-            return Err(ResponseEncoder::empty(false, false)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, false, false).encode_response());
         }
     };
 
@@ -279,9 +251,7 @@ pub(crate) fn decode_check_query(parts: &request::Parts) -> Result<ReqResInto, R
                 format!("Wrong query, {}", err),
             );
 
-            return Err(ResponseEncoder::empty(false, false)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, false, false).encode_response());
         }
     };
 
@@ -294,9 +264,7 @@ pub(crate) fn decode_check_query(parts: &request::Parts) -> Result<ReqResInto, R
                 format!("Wrong or unknown query.encoding: {}", s),
             );
 
-            return Err(ResponseEncoder::empty(true, true)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, true, true).encode_response());
         }
     };
 
@@ -316,9 +284,7 @@ pub(crate) fn decode_check_headers(
                 format!("Unsupported protocol version: {}", version),
             );
 
-            return Err(ResponseEncoder::empty(for_streaming, true)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, for_streaming, true).encode_response());
         }
     }
 
@@ -347,9 +313,7 @@ pub(crate) fn decode_check_headers(
                     format!("Wrong or unknown Content-Type: {}", s),
                 );
 
-                return Err(ResponseEncoder::empty(true, true)
-                    .err(error)
-                    .encode_response());
+                return Err(ResponseEncoder::error(error, true, true).encode_response());
             }
         },
         None => {
@@ -358,9 +322,7 @@ pub(crate) fn decode_check_headers(
                 "Missing Content-Type header".to_string(),
             );
 
-            return Err(ResponseEncoder::empty(true, true)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, true, true).encode_response());
         }
     };
 
@@ -382,9 +344,7 @@ where
         Some(x) => x,
         None => {
             let error = RpcError::new(RpcErrorCode::InvalidArgument, "Missing query".to_string());
-            return Err(ResponseEncoder::empty(false, false)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, false, false).encode_response());
         }
     };
 
@@ -396,9 +356,7 @@ where
                 format!("Wrong query, {}", err),
             );
 
-            return Err(ResponseEncoder::empty(false, false)
-                .err(error)
-                .encode_response());
+            return Err(ResponseEncoder::error(error, false, false).encode_response());
         }
     };
 
@@ -413,9 +371,7 @@ where
                     format!("Wrong query.message, {}", err),
                 );
 
-                return Err(ResponseEncoder::empty(false, false)
-                    .err(error)
-                    .encode_response());
+                return Err(ResponseEncoder::error(error, false, false).encode_response());
             }
         }
     } else {
@@ -429,9 +385,7 @@ where
                 format!("Failed to decode binary protobuf. {}", e),
             );
 
-            ResponseEncoder::empty(for_streaming, as_binary)
-                .err(error)
-                .encode_response()
+            ResponseEncoder::error(error, for_streaming, as_binary).encode_response()
         })?;
 
         Ok(message)
@@ -442,9 +396,7 @@ where
                 format!("Failed to decode json. {}", e),
             );
 
-            ResponseEncoder::empty(for_streaming, as_binary)
-                .err(error)
-                .encode_response()
+            ResponseEncoder::error(error, for_streaming, as_binary).encode_response()
         })?;
 
         Ok(message)
@@ -469,9 +421,7 @@ where
                 format!("Failed to read request body. {}", e),
             );
 
-            ResponseEncoder::empty(for_streaming, as_binary)
-                .err(error)
-                .encode_response()
+            ResponseEncoder::error(error, for_streaming, as_binary).encode_response()
         })?;
 
     // All streaming messages are wrapped in an envelope,
@@ -488,9 +438,7 @@ where
                 format!("Failed to decode binary protobuf. {}", e),
             );
 
-            ResponseEncoder::empty(for_streaming, as_binary)
-                .err(error)
-                .encode_response()
+            ResponseEncoder::error(error, for_streaming, as_binary).encode_response()
         })?;
 
         Ok(message)
@@ -501,9 +449,7 @@ where
                 format!("Failed to decode JSON protobuf. {}", e),
             );
 
-            ResponseEncoder::empty(for_streaming, as_binary)
-                .err(error)
-                .encode_response()
+            ResponseEncoder::error(error, for_streaming, as_binary).encode_response()
         })?;
 
         Ok(message)

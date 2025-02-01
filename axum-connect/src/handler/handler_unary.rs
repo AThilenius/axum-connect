@@ -1,15 +1,15 @@
 use std::pin::Pin;
 
-use axum::{
-    body::Body,
-    http::{Method, Request},
-    response::Response,
-};
+use axum::body::Body;
+use axum::http::{Method, Request};
+use axum::response::Response;
 use futures::Future;
 use prost::Message;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
-use crate::{error::RpcIntoError, parts::RpcFromRequestParts, response::RpcIntoResponse};
+use crate::parts::RpcFromRequestParts;
+use crate::response::RpcIntoResponse;
 
 use super::codec::{
     decode_check_headers, decode_check_query, decode_request_payload,
@@ -31,73 +31,6 @@ pub trait RpcHandlerUnary<TMReq, TMRes, TUid, TState>:
 //      - [0-9a-z]*!"-bin" ASCII value
 //      - [0-9a-z]*-bin" (base64 encoded binary)
 // TODO: Allow response to send back both leading and trailing metadata.
-
-// This is here because writing Rust macros sucks a**. So I uncomment this when I'm trying to modify
-// the below macro.
-// #[allow(unused_parens, non_snake_case, unused_mut)]
-// impl<TMReq, TMRes, TInto, TFnFut, TFn, TState, T1>
-//     RpcHandlerUnary<TMReq, TMRes, (T1, TMReq), TState> for TFn
-// where
-//     TMReq: Message + DeserializeOwned + Default + Send + 'static,
-//     TMRes: Message + Serialize + Send + 'static,
-//     TInto: RpcIntoResponse<TMRes>,
-//     TFnFut: Future<Output = TInto> + Send,
-//     TFn: FnOnce(T1, TMReq) -> TFnFut + Clone + Send + 'static,
-//     TState: Send + Sync + 'static,
-//     T1: RpcFromRequestParts<TMRes, TState> + Send,
-// {
-//     type Future = Pin<Box<dyn Future<Output = Response> + Send>>;
-
-//     fn call(self, req: Request<Body>, state: TState) -> Self::Future {
-//         Box::pin(async move {
-//             let (mut parts, body) = req.into_parts();
-
-//             let ReqResInto { binary } = match decode_check_headers(&mut parts, false) {
-//                 Ok(binary) => binary,
-//                 Err(e) => return e,
-//             };
-
-//             let state = &state;
-
-//             let t1 = match T1::rpc_from_request_parts(&mut parts, state).await {
-//                 Ok(value) => value,
-//                 Err(e) => {
-//                     return ResponseEncoder::empty(false, binary)
-//                         .err(e.rpc_into_error())
-//                         .encode_response();
-//                 }
-//             };
-
-//             let proto_req: TMReq = if parts.method == Method::GET {
-//                 match decode_request_payload_from_query(&parts, state, binary) {
-//                     Ok(value) => value,
-//                     Err(e) => return e,
-//                 }
-//             } else {
-//                 let req = Request::from_parts(parts, body);
-//
-//                 match decode_request_payload(req, state, binary, false).await {
-//                     Ok(value) => value,
-//                     Err(e) => return e,
-//                 }
-//             };
-
-//             let res = self(t1, proto_req).await.rpc_into_response();
-//             match res {
-//                 Ok(res) => {
-//                     ResponseEncoder::<TMRes>::new(false, binary)
-//                         .message(res)
-//                         .encode_response()
-//                 }
-//                 Err(error) => {
-//                     ResponseEncoder::empty(false, binary)
-//                         .err(error)
-//                         .encode_response()
-//                 }
-//             }
-//         })
-//     }
-// }
 
 macro_rules! impl_handler {
     (
@@ -138,10 +71,8 @@ macro_rules! impl_handler {
                     $(
                         let $ty = match $ty::rpc_from_request_parts(&mut parts, state).await {
                             Ok(value) => value,
-                            Err(e) => {
-                                return ResponseEncoder::empty(false, binary)
-                                    .err(e.rpc_into_error())
-                                    .encode_response();
+                            Err(error) => {
+                                return ResponseEncoder::error(error, false, binary).encode_response();
                             }
                         };
                     )*
@@ -160,19 +91,8 @@ macro_rules! impl_handler {
                         }
                     };
 
-                    let res = self($($ty,)* proto_req).await.rpc_into_response();
-                    match res {
-                        Ok(res) => {
-                            ResponseEncoder::<TMRes>::new(false, binary)
-                                .message(res)
-                                .encode_response()
-                        }
-                        Err(error) => {
-                            ResponseEncoder::empty(false, binary)
-                                .err(error)
-                                .encode_response()
-                        }
-                    }
+                    let response = self($($ty,)* proto_req).await;
+                    ResponseEncoder::<TMRes>::unary(response, binary).encode_response()
                 })
             }
         }
