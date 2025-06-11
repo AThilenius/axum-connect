@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
