@@ -25,7 +25,7 @@ impl Default for AxumConnectGenSettings {
             includes: Default::default(),
             inputs: Default::default(),
             protoc_args: Default::default(),
-            protoc_version: Some("22.3".to_string()),
+            protoc_version: Some("31.1".to_string()),
         }
     }
 }
