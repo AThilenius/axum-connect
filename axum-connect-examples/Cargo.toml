@@ -9,7 +9,7 @@ async-stream = "0.3.6"
 axum = "0.8"
 axum-connect = { path = "../axum-connect", features = ["axum-extra"] }
 axum-extra = "0.10.0"
-prost = "0.13"
+prost = "0.13.5"
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["cors"] }

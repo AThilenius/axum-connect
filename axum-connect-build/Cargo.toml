@@ -1,6 +1,6 @@
 [package]
 name = "axum-connect-build"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2021"
 categories = [
@@ -19,8 +19,8 @@ anyhow = "1.0.95"
 convert_case = "0.7.1"
 pbjson-build = "0.7.0"
 proc-macro2 = "1.0.93"
-prost = ">=0.13"
-prost-build = "0.13.4"
+prost = ">=0.13,<0.14"
+prost-build = ">=0.13,<0.14"
 prost-reflect = "0.14.5"
 protoc-fetcher = "0.1.2"
 quote = "1.0.38"
