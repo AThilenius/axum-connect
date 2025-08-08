@@ -1,7 +1,7 @@
 # Axum Connect-Web
 
 Brings the protobuf-based [Connect-Web RPC
-framework](https://connect.build/docs/introduction) to Rust via idiomatic
+framework](https://connectrpc.com) to Rust via idiomatic
 [Axum](https://github.com/tokio-rs/axum).
 
 # Features 🔍
