@@ -1,4 +1,5 @@
-use async_trait::async_trait;
+use std::future::Future;
+
 use axum::{
     extract::{
         connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State,
@@ -13,7 +14,6 @@ use serde::de::DeserializeOwned;
 
 use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
 
-#[async_trait]
 pub trait RpcFromRequestParts<T, S>: Sized
 where
     T: Message,
@@ -24,14 +24,13 @@ where
     type Rejection: RpcIntoError;
 
     /// Perform the extraction.
-    async fn rpc_from_request_parts(
+    fn rpc_from_request_parts(
         parts: &mut http::request::Parts,
         state: &S,
-    ) -> Result<Self, Self::Rejection>;
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
 #[cfg(feature = "axum-extra")]
-#[async_trait]
 impl<M, S> RpcFromRequestParts<M, S> for Host
 where
     M: Message,
@@ -49,7 +48,6 @@ where
     }
 }
 
-#[async_trait]
 impl<M, S, T> RpcFromRequestParts<M, S> for Query<T>
 where
     M: Message,
@@ -68,7 +66,6 @@ where
     }
 }
 
-#[async_trait]
 impl<M, S, T> RpcFromRequestParts<M, S> for ConnectInfo<T>
 where
     M: Message,
@@ -91,7 +88,6 @@ where
     }
 }
 
-#[async_trait]
 impl<M, OuterState, InnerState> RpcFromRequestParts<M, OuterState> for State<InnerState>
 where
     M: Message,

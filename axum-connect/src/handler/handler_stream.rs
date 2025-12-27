@@ -1,9 +1,9 @@
-use std::pin::Pin;
+use std::{future::Future, pin::Pin};
 
 use axum::body::Body;
 use axum::http::Request;
 use axum::response::Response;
-use futures::{Future, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use prost::Message;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

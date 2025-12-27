@@ -1,9 +1,9 @@
+use std::future::Future;
 use std::pin::Pin;
 
 use axum::body::Body;
 use axum::http::{Method, Request};
 use axum::response::Response;
-use futures::Future;
 use prost::Message;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
