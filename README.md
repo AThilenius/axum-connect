@@ -4,6 +4,8 @@ Brings the protobuf-based [Connect-Web RPC
 framework](https://connectrpc.com) to Rust via idiomatic
 [Axum](https://github.com/tokio-rs/axum).
 
+Latest release [v0.5.3](https://github.com/AThilenius/axum-connect/tree/v0.5.3)
+
 # Features 🔍
 
 - Integrates into existing Axum HTTP applications seamlessly
