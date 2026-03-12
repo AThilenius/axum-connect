@@ -9,6 +9,8 @@ Latest release [v0.5.3](https://github.com/AThilenius/axum-connect/tree/v0.5.3)
 # Features 🔍
 
 - Integrates into existing Axum HTTP applications seamlessly
+- **Typesafe Rust client** with generated stubs for unary and server-streaming RPCs
+- Supports both JSON and binary protobuf encoding
 - Closely mirrors Axum's API
   - Extract State and other `parts` that impl `RpcFromRequestParts` just like
     with Axum.
@@ -16,7 +18,7 @@ Latest release [v0.5.3](https://github.com/AThilenius/axum-connect/tree/v0.5.3)
 - Generated types and service handlers are strongly typed and...
 - Handlers enforce semantically correct HTTP 'parts' access.
 - Allows users to derive `RpcIntoResponse` and `RpcFromRequestParts` just like
-  Axum.
+    Axum.
   - Note: These must be derivatives of Axum's types because they are more
     restrictive; you're not dealing with arbitrary HTTP any more, you're
     speaking `connect-web` RPC **over** HTTP.
@@ -41,9 +43,11 @@ You'll obviously also need `axum` and `tokio`.
 # Note: axum-connect-build will fetch `protoc` for you.
 cargo add --build axum-connect-build
 
-# Both Prost and Axum are version sensitive. I haven't found a good workaround
-# for this yet. PRs welcome!
+# Server
 cargo add axum-connect tokio prost@0.13 axum@0.8 --features=tokio/full
+
+# Client (optional, for calling Connect services from Rust)
+cargo add axum-connect-client
 ```
 
 ## Protobuf File 🥱
@@ -205,6 +209,82 @@ curl -X POST http://localhost:3030/hello.HelloWorldService/SayHello \
 
 > {"message":"Hello Alec! You're addressing the hostname: localhost:3030."}
 
+# Typesafe Client 🖥️
+
+`axum-connect` now ships a typesafe Rust client. The code generator produces a
+`{ServiceName}Client` struct for each service with a method per RPC — fully
+typed request and response. Unary and server-streaming calls are supported.
+
+## Quick Start
+
+Add the client crate:
+
+```sh
+cargo add axum-connect-client
+```
+
+The generated client stubs are included automatically alongside server stubs.
+You can control this via `AxumConnectGenSettings`:
+
+```rust
+let settings = AxumConnectGenSettings::from_directory_recursive("proto")
+    .expect("failed to glob proto files")
+    .server(true)   // generate server handlers (default: true)
+    .client(true);  // generate client stubs    (default: true)
+
+axum_connect_codegen(settings).unwrap();
+```
+
+## Usage
+
+```rust
+use axum_connect_client::ConnectClient;
+use futures::StreamExt;
+use proto::hello::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = ConnectClient::new("http://localhost:3030");
+    let svc = HelloWorldServiceClient::new(client);
+
+    // Unary
+    let resp = svc.say_hello(HelloRequest { name: Some("World".into()) }).await?;
+    println!("{}", resp.message);
+
+    // Server-streaming
+    let mut stream = svc.say_hello_stream(HelloRequest { name: Some("Stream".into()) }).await?;
+    while let Some(msg) = stream.next().await {
+        println!("{}", msg?.message);
+    }
+
+    Ok(())
+}
+```
+
+### Binary Protobuf Encoding
+
+The client defaults to JSON but supports binary protobuf:
+
+```rust
+let client = ConnectClient::builder("http://localhost:3030")
+    .use_binary(true)
+    .build();
+```
+
+### Custom reqwest Client
+
+Bring your own TLS config, timeouts, or connection pool:
+
+```rust
+let http = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(10))
+    .build()?;
+
+let client = ConnectClient::builder("http://localhost:3030")
+    .client(http)
+    .build();
+```
+
 # Request/Response Parts 🙍‍♂️
 
 Both the request and response types are derived in `axum-connect`. This might
@@ -241,7 +321,7 @@ handlers.
 
 ## More Distant Goals 🌜
 
-- I would love to also support a WASM-ready client library
+- WASM-ready client (the current `reqwest`-based client may work with WASM targets via `reqwest`'s WASM support)
 - Use `buf.build` to support remote codegen and streamlined proto handling
 - Support gRPC calls
   - I don't think this is hard to do, I just have no personal use-case for it
