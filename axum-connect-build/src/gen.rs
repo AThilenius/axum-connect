@@ -3,29 +3,44 @@ use prost_build::{Method, Service, ServiceGenerator};
 use quote::{format_ident, quote};
 use syn::parse_str;
 
-#[derive(Default)]
-pub struct AxumConnectServiceGenerator {}
+pub struct AxumConnectServiceGenerator {
+    generate_server: bool,
+    generate_client: bool,
+}
 
 impl AxumConnectServiceGenerator {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(server: bool, client: bool) -> Self {
+        Self {
+            generate_server: server,
+            generate_client: client,
+        }
     }
 
     fn generate_service(&mut self, service: Service, buf: &mut String) {
-        // Service struct
-        let service_name = format_ident!("{}", service.name);
-        let methods =
-            service.methods.into_iter().filter_map(|m| {
-                // Don't currently support client streaming. Will-do soon.
-                if m.client_streaming {
-                    return None;
-                }
+        let path_root = format!("{}.{}", service.package, service.proto_name);
 
-                Some(self.generate_service_method(
-                    m,
-                    &format!("{}.{}", service.package, service.proto_name),
-                ))
-            });
+        if self.generate_server {
+            self.generate_server_service(&service, &path_root, buf);
+        }
+    }
+
+    // ── Server codegen ──────────────────────────────────────────────
+
+    fn generate_server_service(
+        &mut self,
+        service: &Service,
+        path_root: &str,
+        buf: &mut String,
+    ) {
+        let service_name = format_ident!("{}", service.name);
+        let methods = service.methods.iter().filter_map(|m| {
+            // Don't currently support client streaming. Will-do soon.
+            if m.client_streaming {
+                return None;
+            }
+
+            Some(self.generate_server_method(m, path_root))
+        });
 
         buf.push_str(
             quote! {
@@ -41,7 +56,7 @@ impl AxumConnectServiceGenerator {
         );
     }
 
-    fn generate_service_method(&mut self, method: Method, path_root: &str) -> TokenStream {
+    fn generate_server_method(&mut self, method: &Method, path_root: &str) -> TokenStream {
         let method_name = format_ident!("{}", method.name);
         let method_name_unary_get = format_ident!("{}_unary_get", method.name);
         let input_type: syn::Type = parse_str(&method.input_type).unwrap();

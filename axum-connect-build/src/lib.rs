@@ -17,6 +17,10 @@ pub struct AxumConnectGenSettings {
     pub inputs: Vec<PathBuf>,
     pub protoc_args: Vec<String>,
     pub protoc_version: Option<String>,
+    /// Generate server-side handler stubs (default: true).
+    pub server: bool,
+    /// Generate typesafe client stubs (default: true).
+    pub client: bool,
 }
 
 impl Default for AxumConnectGenSettings {
@@ -26,6 +30,8 @@ impl Default for AxumConnectGenSettings {
             inputs: Default::default(),
             protoc_args: Default::default(),
             protoc_version: Some("31.1".to_string()),
+            server: true,
+            client: true,
         }
     }
 }
@@ -55,6 +61,18 @@ impl AxumConnectGenSettings {
 
         Ok(settings)
     }
+
+    /// Enable or disable server-side handler stub generation.
+    pub fn server(mut self, enabled: bool) -> Self {
+        self.server = enabled;
+        self
+    }
+
+    /// Enable or disable typesafe client stub generation.
+    pub fn client(mut self, enabled: bool) -> Self {
+        self.client = enabled;
+        self
+    }
 }
 
 pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<()> {
@@ -78,7 +96,10 @@ pub fn axum_connect_codegen(settings: AxumConnectGenSettings) -> anyhow::Result<
     conf.compile_well_known_types();
     conf.file_descriptor_set_path(&descriptor_path);
     conf.extern_path(".google.protobuf", "::axum_connect::pbjson_types");
-    conf.service_generator(Box::new(AxumConnectServiceGenerator::new()));
+    conf.service_generator(Box::new(AxumConnectServiceGenerator::new(
+        settings.server,
+        settings.client,
+    )));
 
     // Arg configuration
     for arg in settings.protoc_args {
