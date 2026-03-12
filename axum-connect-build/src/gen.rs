@@ -22,6 +22,10 @@ impl AxumConnectServiceGenerator {
         if self.generate_server {
             self.generate_server_service(&service, &path_root, buf);
         }
+
+        if self.generate_client {
+            self.generate_client_service(&service, &path_root, buf);
+        }
     }
 
     // ── Server codegen ──────────────────────────────────────────────
@@ -128,6 +132,83 @@ impl AxumConnectServiceGenerator {
                             }),
                         )
                     }
+                }
+            }
+        }
+    }
+
+    // ── Client codegen ──────────────────────────────────────────────
+
+    fn generate_client_service(
+        &mut self,
+        service: &Service,
+        path_root: &str,
+        buf: &mut String,
+    ) {
+        let client_name = format_ident!("{}Client", service.name);
+        let methods = service.methods.iter().filter_map(|m| {
+            // Don't currently support client streaming.
+            if m.client_streaming {
+                return None;
+            }
+
+            Some(self.generate_client_method(m, path_root))
+        });
+
+        buf.push_str(
+            quote! {
+                /// Typesafe Connect RPC client for this service.
+                #[derive(Clone, Debug)]
+                pub struct #client_name {
+                    client: axum_connect_client::ConnectClient,
+                }
+
+                #[allow(dead_code)]
+                impl #client_name {
+                    /// Create a new client from a `ConnectClient`.
+                    pub fn new(client: axum_connect_client::ConnectClient) -> Self {
+                        Self { client }
+                    }
+
+                    #(#methods)*
+                }
+            }
+            .to_string()
+            .as_str(),
+        );
+    }
+
+    fn generate_client_method(&mut self, method: &Method, path_root: &str) -> TokenStream {
+        let method_name = format_ident!("{}", method.name);
+        let input_type: syn::Type = parse_str(&method.input_type).unwrap();
+        let output_type: syn::Type = parse_str(&method.output_type).unwrap();
+        let path = format!("/{}/{}", path_root, method.proto_name);
+
+        if method.server_streaming {
+            quote! {
+                pub async fn #method_name(
+                    &self,
+                    request: #input_type,
+                ) -> Result<
+                    axum_connect_client::stream::ConnectResponseStream<#output_type>,
+                    axum_connect_client::error::RpcError,
+                > {
+                    self.client.server_stream::<#input_type, #output_type>(
+                        #path,
+                        request,
+                    ).await
+                }
+            }
+        } else {
+            quote! {
+                pub async fn #method_name(
+                    &self,
+                    request: #input_type,
+                ) -> Result<#output_type, axum_connect_client::error::RpcError> {
+                    self.client.unary::<#input_type, #output_type>(
+                        #path,
+                        request,
+                    ).await
                 }
             }
         }

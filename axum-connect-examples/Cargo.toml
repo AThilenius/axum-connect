@@ -8,6 +8,7 @@ anyhow = "1.0.95"
 async-stream = "0.3.6"
 axum = "0.8"
 axum-connect = { path = "../axum-connect", features = ["axum-extra"] }
+axum-connect-client = { path = "../axum-connect-client" }
 axum-extra = "0.10.0"
 prost = "0.13.5"
 thiserror = "2.0.11"
