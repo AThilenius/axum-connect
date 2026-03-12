@@ -1,15 +1,17 @@
-use std::convert::Infallible;
 use std::pin::Pin;
 
 use axum::body::{self, Body};
 use axum::http::{header, request, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use prost::Message;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{RpcError, RpcErrorCode, RpcIntoError};
+use axum_connect_core::codec::{
+    CONTENT_TYPE_CONNECT_JSON, CONTENT_TYPE_CONNECT_PROTO, CONTENT_TYPE_JSON, CONTENT_TYPE_PROTO,
+};
+use crate::error::{rpc_error_code_to_status, RpcError, RpcErrorCode, RpcIntoError};
 use crate::response::{RpcIntoResponse, RpcResult};
 
 pub(crate) struct ReqResInto {
@@ -66,7 +68,7 @@ impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
 
         match &self.content {
             UnarySuccess(_) => StatusCode::OK,
-            UnaryError(e) => e.code.clone().into(),
+            UnaryError(e) => rpc_error_code_to_status(&e.code),
 
             // Streaming requests ALWAYS return 200 response code
             // https://connectrpc.com/docs/protocol/#streaming-response
@@ -79,16 +81,16 @@ impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
 
         match (&self.content, self.binary) {
             // Streaming
-            (StreamingSuccess(_) | StreamingError(_), false) => "application/connect+json",
-            (StreamingSuccess(_) | StreamingError(_), true) => "application/connect+proto",
+            (StreamingSuccess(_) | StreamingError(_), false) => CONTENT_TYPE_CONNECT_JSON,
+            (StreamingSuccess(_) | StreamingError(_), true) => CONTENT_TYPE_CONNECT_PROTO,
 
             // Errors in unary calls are ALWAYS encoded as JSONs
             // https://connectrpc.com/docs/protocol/#unary-response
-            (UnaryError(_), _) => "application/json",
+            (UnaryError(_), _) => CONTENT_TYPE_JSON,
 
             // Unary successful
-            (UnarySuccess(_), false) => "application/json",
-            (UnarySuccess(_), true) => "application/proto",
+            (UnarySuccess(_), false) => CONTENT_TYPE_JSON,
+            (UnarySuccess(_), true) => CONTENT_TYPE_PROTO,
         }
     }
 
@@ -108,7 +110,9 @@ impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
             }),
 
             // Streaming
-            StreamingSuccess(stream) => Body::from_stream(encode_stream(stream, self.binary)),
+            StreamingSuccess(stream) => {
+                Body::from_stream(axum_connect_core::codec::encode_stream(stream, self.binary))
+            }
         }
     }
 
@@ -122,107 +126,23 @@ impl<M: Message + Serialize + 'static> ResponseEncoder<M> {
 
 fn encode_unary_error(error: RpcError) -> Vec<u8> {
     // Errors in unary calls are ALWAYS encoded as JSONs
-    //
     // https://connectrpc.com/docs/protocol/#unary-response
-    serde_json::to_vec(&error).unwrap()
+    axum_connect_core::codec::encode_unary_error(error)
 }
 
 fn encode_streaming_error(error: RpcError) -> Vec<u8> {
     // Streaming errors are wrapped in an { "error": ... }
     // while unary errors are just plain JSON encoded.
-    //
     // https://connectrpc.com/docs/protocol/#error-end-stream
-    #[derive(Serialize)]
-    struct EndOfStream {
-        error: RpcError,
-    }
-
-    let message = EndOfStream { error };
-
-    let mut result = vec![0x2, 0, 0, 0, 0];
-    serde_json::to_writer(&mut result, &message).unwrap();
-
-    let size = ((result.len() - 5) as u32).to_be_bytes();
-    result[1..5].copy_from_slice(&size);
-    result
+    axum_connect_core::codec::encode_streaming_error(error)
 }
 
 fn encode_unary_message_binary<M: Message>(message: M) -> Vec<u8> {
-    message.encode_to_vec()
+    axum_connect_core::codec::encode_unary_message_binary(message)
 }
 
 fn encode_unary_message_json<M: Serialize>(message: M) -> RpcResult<Vec<u8>> {
-    match serde_json::to_vec(&message) {
-        Ok(message) => Ok(message),
-        Err(error) => Err(RpcError::new(
-            RpcErrorCode::Internal,
-            format!("Failed to serialize response: {error}"),
-        )),
-    }
-}
-
-fn encode_envelope<M: Serialize + Message>(message: M, binary: bool) -> RpcResult<Vec<u8>> {
-    let mut result = vec![0, 0, 0, 0, 0];
-
-    if binary {
-        if let Err(error) = message.encode(&mut result) {
-            return Err(RpcError::new(RpcErrorCode::Internal, error.to_string()));
-        }
-    } else if let Err(error) = serde_json::to_writer(&mut result, &message) {
-        return Err(RpcError::new(RpcErrorCode::Internal, error.to_string()));
-    }
-
-    let size = ((result.len() - 5) as u32).to_be_bytes();
-    result[1..5].copy_from_slice(&size);
-    Ok(result)
-}
-
-fn encode_stream<M: Serialize + Message + 'static>(
-    stream: ResponseStream<M>,
-    binary: bool,
-) -> impl Stream<Item = Result<Vec<u8>, Infallible>> {
-    // This was born in hell and in hell it shall stay.
-    // For mortals, it simply ensures that all messages
-    // inside the stream are passed along envelope-encodeed
-    // and upon reaching the end, the end message is added.
-    //
-    // At this this stage the only errors can come from within
-    // the stream and this thing handles that case by simply
-    // encoding the error end terminating the stream.
-    futures::stream::unfold(Some(stream), move |stream| async move {
-        match stream {
-            None => {
-                // We are past the last message, returning None
-                // ends the stream without any more messages.
-                None
-            }
-            Some(mut stream) => match stream.next().await {
-                Some(Ok(message)) => {
-                    // This is a normal message, we need to envelope-encode it.
-                    // If an error occurs, we encode it instead and terminate
-                    // the stream.
-                    match encode_envelope(message, binary) {
-                        Ok(message) => Some((Ok(message), Some(stream))),
-                        Err(error) => Some((Ok(encode_streaming_error(error)), None)),
-                    }
-                }
-                Some(Err(error)) => {
-                    // An error in the stream. Send it as the last
-                    // message and terminate the stream.
-                    Some((Ok(encode_streaming_error(error)), None))
-                }
-                None => {
-                    // Stream was read all the way through without errors,
-                    // send the last message.
-                    //
-                    // Final streaming message ALWAYS has to contain at least
-                    // an empty object and is ALWAYS encoded as JSON.
-                    // https://connectrpc.com/docs/protocol/#error-end-stream
-                    Some((Ok(vec![0x2, 0, 0, 0, 2, b'{', b'}']), None))
-                }
-            },
-        }
-    })
+    axum_connect_core::codec::encode_unary_message_json(message)
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
