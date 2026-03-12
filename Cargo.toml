@@ -1,3 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["axum-connect", "axum-connect-build", "axum-connect-examples"]
+members = [
+    "axum-connect",
+    "axum-connect-build",
+    "axum-connect-core",
+    "axum-connect-examples",
+]
