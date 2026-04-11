@@ -25,3 +25,4 @@ prost = ">=0.13,<0.14"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_qs = "0.13.0"
+paste = "1.0"

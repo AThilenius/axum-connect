@@ -25,10 +25,27 @@ impl RpcError {
     pub fn new(code: RpcErrorCode, message: String) -> Self {
         Self {
             code,
-            message,
+            message: message,
             details: vec![],
         }
     }
+
+    implement_new!(Canceled);
+    implement_new!(Unknown);
+    implement_new!(InvalidArgument);
+    implement_new!(DeadlineExceeded);
+    implement_new!(NotFound);
+    implement_new!(AlreadyExists);
+    implement_new!(PermissionDenied);
+    implement_new!(ResourceExhausted);
+    implement_new!(FailedPrecondition);
+    implement_new!(Aborted);
+    implement_new!(OutOfRange);
+    implement_new!(Unimplemented);
+    implement_new!(Internal);
+    implement_new!(Unavailable);
+    implement_new!(DataLoss);
+    implement_new!(Unauthenticated);
 }
 
 impl<C, M> RpcIntoError for (C, M)
