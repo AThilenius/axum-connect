@@ -2,7 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use axum_connect::error::{RpcError, RpcErrorCode, RpcIntoError};
+use axum_connect::error::{RpcError, RpcIntoError};
 
 // This is an example Error type, to demo impls needed for `axum-connect`. It uses `thiserror` to
 // wrap various error types as syntactic sugar, but you could just as easily write this out by hand.
@@ -34,13 +34,9 @@ impl RpcIntoError for Error {
         // Each response is a tuple of well-defined (per the Connect-Web) codes, along with a
         // message.
         match self {
-            Self::Forbidden => {
-                RpcError::new(RpcErrorCode::PermissionDenied, "Forbidden".to_string())
-            }
-            Self::NotFound => RpcError::new(RpcErrorCode::NotFound, "Not Found".to_string()),
-            Self::Anyhow(_) => {
-                RpcError::new(RpcErrorCode::Internal, "Internal Server Error".to_string())
-            }
+            Self::Forbidden => RpcError::new_permission_denied("Forbidden".to_string()),
+            Self::NotFound => RpcError::new_not_found("Not Found".to_string()),
+            Self::Anyhow(_) => RpcError::new_internal("Internal Server Error".to_string()),
         }
     }
 }
@@ -59,4 +55,3 @@ impl IntoResponse for Error {
         }
     }
 }
-
