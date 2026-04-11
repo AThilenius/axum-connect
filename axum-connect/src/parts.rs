@@ -2,7 +2,7 @@ use std::future::Future;
 
 use axum::{
     extract::{
-        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State,
+        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State, Extension,
     },
     http::{self},
     Extension,
@@ -104,3 +104,23 @@ where
         Ok(Self(inner_state))
     }
 }
+
+impl<M, S, T> RpcFromRequestParts<M, S> for Extension<T>
+where
+    M: prost::Message,
+    S: Send + Sync,
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = RpcError;
+
+    async fn rpc_from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        match parts.extensions.get::<T>().cloned() {
+            Some(e) => Ok(RpcExtension(e)),
+            None => Err((RpcErrorCode::Internal, "Missing Extension").rpc_into_error()),
+        }
+    }
+}
+
