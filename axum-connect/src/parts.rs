@@ -118,7 +118,7 @@ where
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         match parts.extensions.get::<T>().cloned() {
-            Some(e) => Ok(RpcExtension(e)),
+            Some(e) => Ok(Extension(e)),
             None => Err((RpcErrorCode::Internal, "Missing Extension").rpc_into_error()),
         }
     }
