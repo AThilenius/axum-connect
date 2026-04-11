@@ -2,7 +2,7 @@ use std::future::Future;
 
 use axum::{
     extract::{
-        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State, Extension,
+        connect_info::MockConnectInfo, ConnectInfo, FromRef, FromRequestParts, Query, State,
     },
     http::{self},
     Extension,
